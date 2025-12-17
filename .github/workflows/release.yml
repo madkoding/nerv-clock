@@ -75,15 +75,18 @@ jobs:
 
       - name: Build Android APK
         run: |
-          cd android
-          chmod +x build.sh
-          # Adapt build script for CI environment
-          export SDK_PATH="$ANDROID_HOME"
+          # Use absolute paths
+          REPO_ROOT="${GITHUB_WORKSPACE}"
+          ANDROID_DIR="$REPO_ROOT/android"
+          UI_DIR="$REPO_ROOT/ui"
+          
+          cd "$ANDROID_DIR"
+          
           export BUILD_TOOLS="$ANDROID_HOME/build-tools/30.0.3"
           export PLATFORM="$ANDROID_HOME/platforms/android-30"
           
           # Build directories
-          BUILD_DIR="build"
+          BUILD_DIR="$ANDROID_DIR/build"
           GEN_DIR="$BUILD_DIR/gen"
           OBJ_DIR="$BUILD_DIR/obj"
           BIN_DIR="$BUILD_DIR/bin"
@@ -119,17 +122,15 @@ jobs:
           
           echo "📦 Creating APK..."
           cp "$OBJ_DIR/app.apk.unaligned" "$OBJ_DIR/app.apk.tmp"
-          cd "$OBJ_DIR"
-          zip -j app.apk.tmp classes.dex
-          cd ..
+          zip -j "$OBJ_DIR/app.apk.tmp" "$OBJ_DIR/classes.dex"
           
-          # Copy UI assets
-          ASSETS_DIR="app/src/main/assets"
+          # Copy UI assets from shared ui/ folder
+          ASSETS_DIR="$ANDROID_DIR/app/src/main/assets"
           rm -rf "$ASSETS_DIR"
           mkdir -p "$ASSETS_DIR/fonts"
-          cp ../ui/index.html "$ASSETS_DIR/widget.html"
+          cp "$UI_DIR/index.html" "$ASSETS_DIR/widget.html"
           sed -i 's/width=device-width/width=400/g' "$ASSETS_DIR/widget.html"
-          cp ../ui/style.css "$ASSETS_DIR/"
+          cp "$UI_DIR/style.css" "$ASSETS_DIR/"
           sed -i 's/cqw/vw/g' "$ASSETS_DIR/style.css"
           sed -i 's/cqh/vh/g' "$ASSETS_DIR/style.css"
           sed -i 's/container-type: size;//g' "$ASSETS_DIR/style.css"
@@ -138,13 +139,14 @@ jobs:
           sed -i 's/font-size: 9vw/font-size: 13vw/g' "$ASSETS_DIR/style.css"
           sed -i 's/font-size: 6vw/font-size: 8vw/g' "$ASSETS_DIR/style.css"
           sed -i 's/font-size: 8vw/font-size: 10vw/g' "$ASSETS_DIR/style.css"
-          cp ../ui/clock.js "$ASSETS_DIR/"
-          cp ../ui/fonts/dseg7.ttf "$ASSETS_DIR/fonts/" 2>/dev/null || true
-          cp ../ui/fonts/dseg7.woff "$ASSETS_DIR/fonts/" 2>/dev/null || true
+          cp "$UI_DIR/clock.js" "$ASSETS_DIR/"
+          cp "$UI_DIR/fonts/dseg7.ttf" "$ASSETS_DIR/fonts/" 2>/dev/null || true
+          cp "$UI_DIR/fonts/dseg7.woff" "$ASSETS_DIR/fonts/" 2>/dev/null || true
           
-          cd app/src/main
-          zip -r "../../../$OBJ_DIR/app.apk.tmp" assets/
-          cd ../../..
+          # Add assets to APK
+          cd "$ANDROID_DIR/app/src/main"
+          zip -r "$OBJ_DIR/app.apk.tmp" assets/
+          cd "$ANDROID_DIR"
           
           echo "✍️ Aligning APK..."
           "$BUILD_TOOLS/zipalign" -f 4 "$OBJ_DIR/app.apk.tmp" "$OBJ_DIR/app.apk.aligned"
