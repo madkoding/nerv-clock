@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NERV Digital Clock Widget - LED Style with Milliseconds -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/nerv_background"
+    android:orientation="vertical"
+    android:padding="4dp">
+
+    <!-- Top bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="NERV"
+            android:textColor="#FF6A00"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="ACTIVE TIME:"
+            android:textColor="#FF6A00"
+            android:textSize="8sp"
+            android:gravity="center"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/status_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="● SYNC"
+            android:textColor="#00CC00"
+            android:textSize="8sp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+
+    <!-- Digital clock with milliseconds -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Ghost digits background -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="88:88:88.88"
+            android:textColor="#1A1200"
+            android:textSize="36sp"
+            android:fontFamily="@font/dseg7" />
+
+        <!-- Actual time -->
+        <TextView
+            android:id="@+id/digital_time"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="00:00:00.00"
+            android:textColor="#FF6A00"
+            android:textSize="36sp"
+            android:fontFamily="@font/dseg7"
+            android:shadowColor="#FF6A00"
+            android:shadowDx="0"
+            android:shadowDy="0"
+            android:shadowRadius="8" />
+    </FrameLayout>
+
+    <!-- Bottom bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <View
+            android:layout_width="6dp"
+            android:layout_height="6dp"
+            android:background="@drawable/status_light" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="MAGI:ONLINE"
+            android:textColor="#00CC00"
+            android:textSize="7sp"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="内部電源"
+            android:textColor="#FF6A00"
+            android:textSize="8sp" />
+    </LinearLayout>
+
+</LinearLayout>

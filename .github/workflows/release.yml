@@ -1,0 +1,186 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            target: linux
+          - platform: windows-latest
+            target: windows
+          - platform: macos-latest
+            target: macos
+
+    runs-on: ${{ matrix.platform }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'NERV Clock ${{ github.ref_name }}'
+          releaseBody: 'Evangelion-style clock widget for desktop and Android'
+          releaseDraft: true
+          prerelease: false
+
+  build-android:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android Build Tools
+        run: |
+          sdkmanager "build-tools;30.0.3" "platforms;android-30"
+
+      - name: Build Android APK
+        run: |
+          cd android
+          chmod +x build.sh
+          # Adapt build script for CI environment
+          export SDK_PATH="$ANDROID_HOME"
+          export BUILD_TOOLS="$ANDROID_HOME/build-tools/30.0.3"
+          export PLATFORM="$ANDROID_HOME/platforms/android-30"
+          
+          # Build directories
+          BUILD_DIR="build"
+          GEN_DIR="$BUILD_DIR/gen"
+          OBJ_DIR="$BUILD_DIR/obj"
+          BIN_DIR="$BUILD_DIR/bin"
+          CLASSES_DIR="$BUILD_DIR/classes"
+          
+          rm -rf "$BUILD_DIR"
+          mkdir -p "$GEN_DIR" "$OBJ_DIR" "$BIN_DIR" "$CLASSES_DIR"
+          
+          echo "📦 Compiling resources..."
+          "$BUILD_TOOLS/aapt2" compile --dir app/src/main/res -o "$OBJ_DIR/resources.zip"
+          
+          echo "📦 Linking resources..."
+          "$BUILD_TOOLS/aapt2" link \
+              "$OBJ_DIR/resources.zip" \
+              -I "$PLATFORM/android.jar" \
+              --manifest app/src/main/AndroidManifest.xml \
+              --java "$GEN_DIR" \
+              -o "$OBJ_DIR/app.apk.unaligned" \
+              --auto-add-overlay
+          
+          echo "☕ Compiling Java..."
+          find app/src/main/java -name "*.java" > "$BUILD_DIR/sources.txt"
+          echo "$GEN_DIR/com/nerv/clock/R.java" >> "$BUILD_DIR/sources.txt"
+          
+          javac -source 1.8 -target 1.8 \
+              -bootclasspath "$PLATFORM/android.jar" \
+              -classpath "$PLATFORM/android.jar" \
+              -d "$CLASSES_DIR" \
+              @"$BUILD_DIR/sources.txt"
+          
+          echo "📱 Creating DEX..."
+          "$BUILD_TOOLS/dx" --dex --output="$OBJ_DIR/classes.dex" "$CLASSES_DIR"
+          
+          echo "📦 Creating APK..."
+          cp "$OBJ_DIR/app.apk.unaligned" "$OBJ_DIR/app.apk.tmp"
+          cd "$OBJ_DIR"
+          zip -j app.apk.tmp classes.dex
+          cd ..
+          
+          # Copy UI assets
+          ASSETS_DIR="app/src/main/assets"
+          rm -rf "$ASSETS_DIR"
+          mkdir -p "$ASSETS_DIR/fonts"
+          cp ../ui/index.html "$ASSETS_DIR/widget.html"
+          sed -i 's/width=device-width/width=400/g' "$ASSETS_DIR/widget.html"
+          cp ../ui/style.css "$ASSETS_DIR/"
+          sed -i 's/cqw/vw/g' "$ASSETS_DIR/style.css"
+          sed -i 's/cqh/vh/g' "$ASSETS_DIR/style.css"
+          sed -i 's/container-type: size;//g' "$ASSETS_DIR/style.css"
+          sed -i 's/container-name: clock;//g' "$ASSETS_DIR/style.css"
+          # Font size adjustments for Android
+          sed -i 's/font-size: 9vw/font-size: 13vw/g' "$ASSETS_DIR/style.css"
+          sed -i 's/font-size: 6vw/font-size: 8vw/g' "$ASSETS_DIR/style.css"
+          sed -i 's/font-size: 8vw/font-size: 10vw/g' "$ASSETS_DIR/style.css"
+          cp ../ui/clock.js "$ASSETS_DIR/"
+          cp ../ui/fonts/dseg7.ttf "$ASSETS_DIR/fonts/" 2>/dev/null || true
+          cp ../ui/fonts/dseg7.woff "$ASSETS_DIR/fonts/" 2>/dev/null || true
+          
+          cd app/src/main
+          zip -r "../../../$OBJ_DIR/app.apk.tmp" assets/
+          cd ../../..
+          
+          echo "✍️ Aligning APK..."
+          "$BUILD_TOOLS/zipalign" -f 4 "$OBJ_DIR/app.apk.tmp" "$OBJ_DIR/app.apk.aligned"
+          
+          echo "🔑 Generating keystore..."
+          keytool -genkey -v \
+              -keystore release.keystore \
+              -alias nerv \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass android \
+              -keypass android \
+              -dname "CN=NERV, OU=MAGI, O=NERV, L=Tokyo-3, ST=Japan, C=JP"
+          
+          echo "✍️ Signing APK..."
+          "$BUILD_TOOLS/apksigner" sign \
+              --ks release.keystore \
+              --ks-pass pass:android \
+              --key-pass pass:android \
+              --out "$BIN_DIR/NervClock.apk" \
+              "$OBJ_DIR/app.apk.aligned"
+          
+          echo "✅ APK built: $BIN_DIR/NervClock.apk"
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android/build/bin/NervClock.apk
+
+      - name: Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: android/build/bin/NervClock.apk
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

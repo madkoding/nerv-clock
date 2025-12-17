@@ -1,0 +1,536 @@
+/* NERV Chronometer - Evangelion Digital Clock Style */
+/* Responsive 7-Segment Digital Display */
+
+@font-face {
+    font-family: 'DSEG7';
+    src: url('fonts/dseg7.woff') format('woff'),
+         url('fonts/dseg7.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+    font-display: block;
+}
+
+:root {
+    --nerv-orange: #FF6A00;
+    --nerv-orange-bright: #FF8C00;
+    --nerv-orange-dim: rgba(255, 106, 0, 0.15);
+    --nerv-orange-glow: rgba(255, 106, 0, 0.5);
+    --nerv-red: #CC0000;
+    --nerv-red-dark: #880000;
+    --nerv-red-stripe: #AA0000;
+    --nerv-green: #00CC00;
+    --nerv-dark: #0A0800;
+    --nerv-dark-brown: #1A1400;
+    --segment-off: rgba(255, 106, 0, 0.12);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    font-family: 'Courier New', 'Consolas', monospace;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.nerv-container {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, #1a1400 0%, #0d0900 100%);
+    border: 2px solid var(--nerv-orange);
+    padding: 1% 2%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    -webkit-app-region: drag;
+    
+    
+    overflow: hidden;
+}
+
+/* Close button - desktop only (Tauri) */
+.close-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 20px;
+    height: 20px;
+    background: rgba(136, 0, 0, 0.8);
+    border: 1px solid var(--nerv-red);
+    border-radius: 2px;
+    color: var(--nerv-orange);
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 200;
+    -webkit-app-region: no-drag;
+    display: none; /* Hidden by default, shown by JS in Tauri */
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.15s;
+}
+
+.close-btn.visible {
+    display: flex;
+}
+
+.close-btn:hover {
+    background: var(--nerv-red);
+    color: white;
+    box-shadow: 0 0 8px var(--nerv-red);
+}
+
+/* Hexagon pattern background */
+.hex-pattern {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23880000' fill-opacity='0.15'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Animated hex glow */
+.hex-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(ellipse at center, rgba(136, 0, 0, 0.1) 0%, transparent 70%);
+    animation: hexPulse 4s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes hexPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.8; }
+}
+
+/* Scan lines effect */
+.scan-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.1) 2px,
+        rgba(0, 0, 0, 0.1) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+}
+
+/* Top bar */
+.top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2%;
+    flex-shrink: 0;
+    height: auto;
+    margin-bottom: 1%;
+    position: relative;
+    z-index: 10;
+}
+
+.jp-text {
+    color: var(--nerv-orange);
+    font-size: 2.3vw;
+    font-weight: bold;
+    white-space: nowrap;
+    text-shadow: 0 0 5px var(--nerv-orange-glow);
+}
+
+.label-text {
+    color: var(--nerv-orange);
+    font-size: 1.9vw;
+    flex: 1;
+    text-align: center;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 5px var(--nerv-orange-glow);
+}
+
+.mode-indicator {
+    color: var(--nerv-green);
+    font-size: 1.9vw;
+    font-weight: bold;
+    text-shadow: 0 0 5px var(--nerv-green);
+    margin-right: 1%;
+}
+
+.mode-indicator.racing { color: var(--nerv-red); text-shadow: 0 0 5px var(--nerv-red); }
+.mode-indicator.slow { color: #FFCC00; text-shadow: 0 0 5px #FFCC00; }
+.mode-indicator.stop { color: #888; text-shadow: 0 0 5px #888; }
+
+/* Warning box with stripes */
+.warning-box {
+    display: flex;
+    align-items: stretch;
+    position: relative;
+}
+
+.warning-stripes {
+    width: 2vw;
+    min-width: 10px;
+    background: repeating-linear-gradient(
+        -55deg,
+        var(--nerv-red),
+        var(--nerv-red) 3px,
+        #1a1a1a 3px,
+        #1a1a1a 6px
+    );
+    order: 2;
+}
+
+.warning-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #0a0800;
+    border: 1px solid var(--nerv-orange);
+    padding: 1px 4px;
+    order: 1;
+}
+
+.kanji {
+    color: var(--nerv-orange);
+    font-size: 2.5vw;
+    font-weight: bold;
+    line-height: 1.1;
+    text-shadow: 0 0 8px var(--nerv-orange-glow);
+}
+
+.internal {
+    color: var(--nerv-orange);
+    font-size: 1.5vw;
+    letter-spacing: 0.5px;
+}
+
+.sub-text {
+    position: absolute;
+    bottom: -1.2vw;
+    right: 0;
+    color: var(--nerv-orange);
+    font-size: 1vw;
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
+/* Main clock display - RESPONSIVE */
+.clock-display {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5vw;
+    -webkit-app-region: no-drag;
+    min-height: 0;
+    position: relative;
+    z-index: 10;
+}
+
+.digit-group {
+    display: flex;
+    gap: 0.2vw;
+    position: relative;
+}
+
+/* Glow ambiental alrededor de los dígitos */
+.digit-group::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120%;
+    height: 140%;
+    background: radial-gradient(ellipse at center, rgba(255, 106, 0, 0.03) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: -1;
+}
+
+/* 7-Segment style digits - RESPONSIVE to container WIDTH */
+.segment-digit {
+    font-family: 'DSEG7', 'Consolas', monospace;
+    font-size: 13vw;
+    font-weight: normal;
+    color: var(--nerv-orange);
+    text-shadow: 
+        0 0 0.3vw var(--nerv-orange-glow),
+        0 0 0.8vw rgba(255, 106, 0, 0.4),
+        0 0 1.5vw rgba(255, 106, 0, 0.2);
+    line-height: 1;
+    position: relative;
+    min-width: 0.6em;
+    text-align: center;
+}
+
+/* Elemento ghost que muestra el dígito anterior desvaneciendose */
+.segment-digit .ghost {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    color: var(--nerv-orange);
+    opacity: 0;
+    pointer-events: none;
+    font-family: 'DSEG7', monospace;
+    text-shadow: 
+        0 0 0.5vw var(--nerv-orange),
+        0 0 1.2vw var(--nerv-orange-glow);
+}
+
+.segment-digit .ghost.fade-out {
+    animation: ghostFade 300ms ease-out forwards;
+}
+
+@keyframes ghostFade {
+    0% { opacity: 0.8; }
+    100% { opacity: 0; }
+}
+
+/* Ghost digit behind for segment effect */
+.segment-digit::before {
+    content: '8';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    color: var(--segment-off);
+    text-shadow: none;
+    z-index: -1;
+    font-family: 'DSEG7', monospace;
+}
+
+.segment-digit.small {
+    font-size: 10vw;
+}
+
+.segment-digit.small::before {
+    content: '8';
+}
+
+.colon {
+    font-family: 'DSEG7', 'Courier New', monospace;
+    font-size: 10vw;
+    font-weight: normal;
+    color: var(--nerv-orange);
+    text-shadow: 0 0 0.5vw var(--nerv-orange-glow);
+    line-height: 1;
+    animation: blink 1s ease-in-out infinite;
+    margin: 0 0.1vw;
+}
+
+.small-colon {
+    font-size: 10vw;
+    animation: none;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+/* Control bar */
+.control-bar {
+    display: flex;
+    gap: 1%;
+    padding-top: 1%;
+    border-top: 1px solid var(--nerv-orange-dim);
+    margin-top: 1%;
+    -webkit-app-region: no-drag;
+    flex-shrink: 0;
+    height: auto;
+    position: relative;
+    z-index: 10;
+}
+
+.ctrl-btn {
+    flex: 1;
+    background: linear-gradient(180deg, #252520 0%, #151510 100%);
+    border: 2px solid #3a3a30;
+    border-radius: 2px;
+    color: var(--nerv-green);
+    font-family: 'Courier New', monospace;
+    font-size: 2vw;
+    font-weight: bold;
+    padding: 0.5% 0;
+    cursor: pointer;
+    text-shadow: 0 0 4px currentColor;
+    transition: all 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ctrl-btn:hover {
+    background: linear-gradient(180deg, #353530 0%, #252520 100%);
+    border-color: #555;
+}
+
+.ctrl-btn.active {
+    background: linear-gradient(180deg, #200800 0%, #301000 100%);
+    border-color: var(--nerv-red);
+    color: var(--nerv-orange);
+    box-shadow: inset 0 0 8px rgba(255, 106, 0, 0.2);
+}
+
+.ctrl-btn[data-mode="stop"].active { border-color: var(--nerv-green); color: var(--nerv-green); }
+.ctrl-btn[data-mode="slow"].active { border-color: #FFCC00; color: #FFCC00; }
+.ctrl-btn[data-mode="racing"].active { border-color: var(--nerv-red); color: var(--nerv-red); }
+.ctrl-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+
+.status-light {
+    width: 4%;
+    min-width: 12px;
+    background: radial-gradient(circle at 30% 30%, #ff3333, var(--nerv-red) 60%, #800000);
+    border: 2px solid #600;
+    border-radius: 2px;
+    box-shadow: 0 0 8px var(--nerv-red);
+    animation: pulse-light 0.5s ease-in-out infinite;
+}
+
+@keyframes pulse-light {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Corner accents */
+.corner {
+    position: absolute;
+    width: 1.5vw;
+    height: 1.5vw;
+    min-width: 6px;
+    min-height: 6px;
+    border: 2px solid var(--nerv-orange);
+    pointer-events: none;
+    z-index: 10;
+}
+
+.corner-tl { top: 2px; left: 2px; border-right: none; border-bottom: none; }
+.corner-tr { top: 2px; right: 2px; border-left: none; border-bottom: none; }
+.corner-bl { bottom: 2px; left: 2px; border-right: none; border-top: none; }
+.corner-br { bottom: 2px; right: 2px; border-left: none; border-top: none; }
+
+/* Fallback for browsers without container queries */
+@supports not (container-type: size) {
+    .segment-digit {
+        font-size: 13vw;
+    }
+    .segment-digit.small {
+        font-size: 10vw;
+    }
+    .colon {
+        font-size: 10vw;
+    }
+    .small-colon {
+        font-size: 10vw;
+    }
+}
+
+/* Hide elements when too small */
+@container clock (max-height: 80px) {
+    .top-bar { display: none; }
+    .control-bar { display: none; }
+}
+
+@container clock (max-width: 200px) {
+    .warning-box { display: none; }
+    .jp-text { display: none; }
+    .segment-digit.small { display: none; }
+    .small-colon { display: none; }
+}
+
+/* Timer warning states - 4 minutes remaining */
+.clock-display.warning .segment-digit,
+.clock-display.warning .colon {
+    color: #FFCC00;
+    text-shadow: 
+        0 0 0.3vw rgba(255, 204, 0, 0.5),
+        0 0 0.8vw rgba(255, 204, 0, 0.4),
+        0 0 1.5vw rgba(255, 204, 0, 0.2);
+}
+
+.clock-display.warning .segment-digit .ghost {
+    color: #FFCC00;
+    text-shadow: 
+        0 0 0.5vw #FFCC00,
+        0 0 1.2vw rgba(255, 204, 0, 0.5);
+}
+
+/* Timer critical state - 1 minute remaining */
+.clock-display.critical .segment-digit,
+.clock-display.critical .colon {
+    color: #FF0000;
+    text-shadow: 
+        0 0 0.3vw rgba(255, 0, 0, 0.5),
+        0 0 0.8vw rgba(255, 0, 0, 0.4),
+        0 0 1.5vw rgba(255, 0, 0, 0.2);
+    animation: criticalPulse 0.5s ease-in-out infinite;
+}
+
+.clock-display.critical .segment-digit .ghost {
+    color: #FF0000;
+    text-shadow: 
+        0 0 0.5vw #FF0000,
+        0 0 1.2vw rgba(255, 0, 0, 0.5);
+}
+
+@keyframes criticalPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Depleted state message */
+.depleted-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    animation: depletedFlash 1s ease-in-out infinite;
+}
+
+.depleted-jp {
+    font-family: 'Courier New', monospace;
+    font-size: 10vw;
+    font-weight: bold;
+    color: #FF0000;
+    text-shadow: 
+        0 0 5px #FF0000,
+        0 0 10px rgba(255, 0, 0, 0.5),
+        0 0 20px rgba(255, 0, 0, 0.3);
+    letter-spacing: 2px;
+}
+
+.depleted-en {
+    font-family: 'Courier New', monospace;
+    font-size: 10vw;
+    font-weight: bold;
+    color: #FF0000;
+    text-shadow: 
+        0 0 5px #FF0000,
+        0 0 10px rgba(255, 0, 0, 0.5);
+    letter-spacing: 4px;
+    margin-top: 0.5vw;
+}
+
+@keyframes depletedFlash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

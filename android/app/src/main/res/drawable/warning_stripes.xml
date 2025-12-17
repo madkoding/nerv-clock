@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Warning stripes - red/black diagonal -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#AA0000" />
+        </shape>
+    </item>
+    <item>
+        <rotate
+            android:fromDegrees="-45"
+            android:pivotX="50%"
+            android:pivotY="50%">
+            <shape android:shape="rectangle">
+                <gradient
+                    android:startColor="#1A1A1A"
+                    android:endColor="#1A1A1A"
+                    android:type="linear"
+                    android:angle="0" />
+            </shape>
+        </rotate>
+    </item>
+</layer-list>

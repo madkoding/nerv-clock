@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>NERV Chronometer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="nerv-container">
+        <!-- Close button (desktop only) -->
+        <button class="close-btn" id="close-btn" title="Close">×</button>
+        
+        <!-- Hexagon pattern background -->
+        <div class="hex-pattern"></div>
+        <div class="hex-glow"></div>
+        
+        <!-- Scan lines overlay -->
+        <div class="scan-lines"></div>
+        
+        <!-- Top bar with Japanese text -->
+        <div class="top-bar">
+            <div class="jp-text">作戦終了まで</div>
+            <div class="label-text">NERV CHRONOMETER SYSTEM</div>
+            <span class="mode-indicator" id="mode-indicator">NORMAL</span>
+            <div class="warning-box">
+                <div class="warning-stripes"></div>
+                <div class="warning-content">
+                    <span class="kanji">内部</span>
+                    <span class="internal">INTERNAL</span>
+                </div>
+                <div class="sub-text">非常電源システム</div>
+            </div>
+        </div>
+
+        <!-- Main digital clock display -->
+        <div class="clock-display">
+            <div class="digit-group hours">
+                <div class="segment-digit" id="hour1"><span class="ghost"></span>0</div>
+                <div class="segment-digit" id="hour2"><span class="ghost"></span>0</div>
+            </div>
+            <div class="colon">:</div>
+            <div class="digit-group minutes">
+                <div class="segment-digit" id="min1"><span class="ghost"></span>0</div>
+                <div class="segment-digit" id="min2"><span class="ghost"></span>0</div>
+            </div>
+            <div class="colon">:</div>
+            <div class="digit-group seconds">
+                <div class="segment-digit" id="sec1"><span class="ghost"></span>0</div>
+                <div class="segment-digit" id="sec2"><span class="ghost"></span>0</div>
+            </div>
+            <div class="colon small-colon">.</div>
+            <div class="digit-group millis">
+                <div class="segment-digit small" id="ms1"><span class="ghost"></span>0</div>
+                <div class="segment-digit small" id="ms2"><span class="ghost"></span>0</div>
+            </div>
+        </div>
+
+        <!-- Bottom control buttons -->
+        <div class="control-bar">
+            <button class="ctrl-btn" data-mode="stop">STOP</button>
+            <button class="ctrl-btn" data-mode="slow">SLOW</button>
+            <button class="ctrl-btn active" data-mode="normal">NORMAL</button>
+            <button class="ctrl-btn" data-mode="racing">RACING</button>
+            <div class="status-light"></div>
+        </div>
+
+        <!-- Corner accents -->
+        <div class="corner corner-tl"></div>
+        <div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div>
+        <div class="corner corner-br"></div>
+    </div>
+
+    <script src="clock.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NERV Clock</string>
+    <string name="widget_name">NERV Chronometer</string>
+    <string name="widget_description">Evangelion-style clock widget with transparent background</string>
+</resources>

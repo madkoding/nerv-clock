@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+/android/build/
+/src-tauri/target/
+/release/
+
+# Keystore (sensitive)
+*.keystore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

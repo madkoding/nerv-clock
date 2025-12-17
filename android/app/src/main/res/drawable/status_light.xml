@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status light - red LED -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:startColor="#FF3333"
+        android:centerColor="#CC0000"
+        android:endColor="#800000"
+        android:angle="135" />
+    <stroke
+        android:width="2dp"
+        android:color="#600000" />
+    <corners android:radius="2dp" />
+</shape>

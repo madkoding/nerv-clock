@@ -1,0 +1,16 @@
+{
+	"name": "nerv-clock",
+	"version": "1.0.0",
+	"description": "NERV Chronometer - Evangelion Style Clock Widget",
+	"main": "ui/index.html",
+	"scripts": {
+		"tauri": "tauri",
+		"dev": "tauri dev",
+		"build": "tauri build"
+	},
+	"author": "NERV",
+	"license": "MIT",
+	"devDependencies": {
+		"@tauri-apps/cli": "^2"
+	}
+}

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NERV Digital Background - Evangelion Style -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Dark brown gradient background -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#1A1400"
+                android:endColor="#0D0900"
+                android:angle="270" />
+        </shape>
+    </item>
+    <!-- Orange border -->
+    <item>
+        <shape android:shape="rectangle">
+            <stroke
+                android:width="3dp"
+                android:color="#FF6A00" />
+        </shape>
+    </item>
+</layer-list>

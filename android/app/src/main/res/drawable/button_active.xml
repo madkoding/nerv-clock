@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Active button style - RACING -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:startColor="#200800"
+        android:endColor="#301000"
+        android:angle="270" />
+    <stroke
+        android:width="2dp"
+        android:color="#CC0000" />
+    <corners android:radius="2dp" />
+</shape>
