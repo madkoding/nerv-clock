@@ -525,16 +525,16 @@ html, body {
 }
 
 .depleted-stripe {
-    width: 3cqw;
-    height: 80%;
+    width: 2cqw;
+    height: 60%;
     background: repeating-linear-gradient(
         -45deg,
         #FF0000,
-        #FF0000 4px,
-        #1a1a1a 4px,
-        #1a1a1a 8px
+        #FF0000 3px,
+        #1a1a1a 3px,
+        #1a1a1a 6px
     );
-    box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+    box-shadow: 0 0 8px rgba(255, 0, 0, 0.5);
 }
 
 .depleted-content {
@@ -542,34 +542,34 @@ html, body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 1cqw 3cqw;
-    border: 2px solid #FF0000;
+    padding: 0.5cqw 2cqw;
+    border: 1px solid #FF0000;
     background: rgba(255, 0, 0, 0.1);
-    box-shadow: 0 0 15px rgba(255, 0, 0, 0.3);
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
 }
 
 .depleted-jp {
-    font-family: 'Nimbus Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    font-size: 6cqw;
-    font-weight: bold;
-    color: #FF0000;
-    text-shadow: 
-        0 0 5px #FF0000,
-        0 0 10px rgba(255, 0, 0, 0.5),
-        0 0 20px rgba(255, 0, 0, 0.3);
-    letter-spacing: 2px;
-}
-
-.depleted-en {
     font-family: 'Nimbus Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     font-size: 4cqw;
     font-weight: bold;
     color: #FF0000;
     text-shadow: 
         0 0 5px #FF0000,
+        0 0 10px rgba(255, 0, 0, 0.5),
+        0 0 20px rgba(255, 0, 0, 0.3);
+    letter-spacing: 1px;
+}
+
+.depleted-en {
+    font-family: 'Nimbus Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 2.5cqw;
+    font-weight: bold;
+    color: #FF0000;
+    text-shadow: 
+        0 0 5px #FF0000,
         0 0 10px rgba(255, 0, 0, 0.5);
-    letter-spacing: 4px;
-    margin-top: 0.5cqw;
+    letter-spacing: 2px;
+    margin-top: 0.3cqw;
 }
 
 @keyframes depletedFlash {
