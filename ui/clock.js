@@ -241,12 +241,16 @@ class NervClock {
         const digitGroups = document.querySelectorAll('.digit-group, .colon');
         digitGroups.forEach(el => el.style.display = 'none');
         
-        // Create depleted message
+        // Create depleted message with Evangelion style (jp, stripes, en)
         const msg = document.createElement('div');
         msg.className = 'depleted-message';
         msg.innerHTML = `
-            <div class="depleted-jp">電力枯渇</div>
-            <div class="depleted-en">DEPLETED</div>
+            <div class="depleted-stripe left"></div>
+            <div class="depleted-content">
+                <div class="depleted-jp">電力枯渇</div>
+                <div class="depleted-en">DEPLETED</div>
+            </div>
+            <div class="depleted-stripe right"></div>
         `;
         
         if (this.clockDisplay) {

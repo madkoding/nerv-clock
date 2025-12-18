@@ -31,9 +31,15 @@ public class NervClockWidget extends AppWidgetProvider {
     private static boolean isUpdating = false;
     private static boolean pageLoaded = false;
     private static boolean isCreatingWebView = false;
-    private static final int UPDATE_INTERVAL = 50;
+    
+    // Reusable bitmap and canvas for better performance
+    private static Bitmap reusableBitmap = null;
+    private static Canvas reusableCanvas = null;
+    private static int lastRenderWidth = 0;
+    private static int lastRenderHeight = 0;
+    private static final int UPDATE_INTERVAL = 33; // ~30 fps
     private static final int PAGE_LOAD_TIMEOUT = 10000; // 10 seconds timeout for page load
-    private static final int WEBVIEW_INIT_DELAY = 500; // Delay before creating WebView
+    private static final int WEBVIEW_INIT_DELAY = 100; // Reduced delay before creating WebView
     private static final int MAX_RETRY_COUNT = 3;
     private static int retryCount = 0;
     private static Context appContext;
@@ -73,6 +79,18 @@ public class NervClockWidget extends AppWidgetProvider {
         
         appContext = context.getApplicationContext();
         
+        // Calculate render size based on screen density FIRST
+        DisplayMetrics dm = context.getResources().getDisplayMetrics();
+        renderWidth = Math.max((int)(BASE_WIDTH_DP * dm.density), BASE_WIDTH_DP);
+        renderHeight = Math.max((int)(BASE_HEIGHT_DP * dm.density), BASE_HEIGHT_DP);
+        
+        Log.d(TAG, "Render size: " + renderWidth + "x" + renderHeight + " (density: " + dm.density + ")");
+        
+        // IMMEDIATELY set initial view with placeholder for each widget - this must happen first
+        for (int appWidgetId : appWidgetIds) {
+            setupInitialView(context, appWidgetManager, appWidgetId);
+        }
+        
         // Check if app was reinstalled by comparing update times
         long currentUpdateTime = getAppUpdateTime(context);
         boolean appReinstalled = (currentUpdateTime != lastAppUpdateTime);
@@ -82,18 +100,6 @@ public class NervClockWidget extends AppWidgetProvider {
             Log.d(TAG, "App reinstall detected, forcing WebView recreation");
             stopUpdates();
             retryCount = 0; // Reset retry count on reinstall
-        }
-        
-        // Calculate render size based on screen density
-        DisplayMetrics dm = context.getResources().getDisplayMetrics();
-        renderWidth = Math.max((int)(BASE_WIDTH_DP * dm.density), BASE_WIDTH_DP);
-        renderHeight = Math.max((int)(BASE_HEIGHT_DP * dm.density), BASE_HEIGHT_DP);
-        
-        Log.d(TAG, "Render size: " + renderWidth + "x" + renderHeight + " (density: " + dm.density + ")");
-        
-        // Setup click handlers for each widget
-        for (int appWidgetId : appWidgetIds) {
-            setupClickHandlers(context, appWidgetManager, appWidgetId);
         }
         
         // Schedule periodic alarm to keep widget alive
@@ -107,6 +113,110 @@ public class NervClockWidget extends AppWidgetProvider {
                 startWebViewUpdates(ctx);
             }
         }, WEBVIEW_INIT_DELAY);
+    }
+    
+    /**
+     * Setup initial view with placeholder and click handlers.
+     * This ensures the widget is immediately visible and responsive.
+     */
+    private void setupInitialView(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
+        try {
+            Log.d(TAG, "Setting up initial view for widget " + appWidgetId);
+            RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_webview);
+            
+            // Create a simple placeholder bitmap with NERV colors - keep it fast
+            Bitmap placeholder = createPlaceholderBitmap();
+            if (placeholder != null) {
+                views.setImageViewBitmap(R.id.widget_image, placeholder);
+            }
+            
+            // Set click handlers
+            views.setOnClickPendingIntent(R.id.btn_stop, 
+                getPendingIntent(context, ACTION_STOP, appWidgetId));
+            views.setOnClickPendingIntent(R.id.btn_slow, 
+                getPendingIntent(context, ACTION_SLOW, appWidgetId));
+            views.setOnClickPendingIntent(R.id.btn_normal, 
+                getPendingIntent(context, ACTION_NORMAL, appWidgetId));
+            views.setOnClickPendingIntent(R.id.btn_racing, 
+                getPendingIntent(context, ACTION_RACING, appWidgetId));
+            
+            // Update widget immediately - this is critical
+            appWidgetManager.updateAppWidget(appWidgetId, views);
+            Log.d(TAG, "Initial view set successfully for widget " + appWidgetId);
+        } catch (Exception e) {
+            Log.e(TAG, "Error setting initial view: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Create a placeholder bitmap with NERV/Evangelion style while loading.
+     * Optimized for speed to avoid "widget could not be added" error.
+     */
+    private Bitmap createPlaceholderBitmap() {
+        try {
+            int width = Math.max(renderWidth, BASE_WIDTH_DP);
+            int height = Math.max(renderHeight, BASE_HEIGHT_DP);
+            
+            Bitmap bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(bmp);
+            
+            // Fill with NERV dark background
+            canvas.drawColor(Color.parseColor("#0d0900"));
+            
+            android.graphics.Paint paint = new android.graphics.Paint();
+            paint.setAntiAlias(true);
+            
+            // Draw warning stripes bar at top
+            int stripeHeight = height / 8;
+            int stripeWidth = stripeHeight;
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+            
+            for (int x = 0; x < width + stripeHeight; x += stripeWidth * 2) {
+                // Yellow stripe
+                paint.setColor(Color.parseColor("#FFB800"));
+                android.graphics.Path path = new android.graphics.Path();
+                path.moveTo(x, 0);
+                path.lineTo(x + stripeWidth, 0);
+                path.lineTo(x, stripeHeight);
+                path.lineTo(x - stripeWidth, stripeHeight);
+                path.close();
+                canvas.drawPath(path, paint);
+                
+                // Black stripe
+                paint.setColor(Color.parseColor("#1a1a1a"));
+                path = new android.graphics.Path();
+                path.moveTo(x + stripeWidth, 0);
+                path.lineTo(x + stripeWidth * 2, 0);
+                path.lineTo(x + stripeWidth, stripeHeight);
+                path.lineTo(x, stripeHeight);
+                path.close();
+                canvas.drawPath(path, paint);
+            }
+            
+            // Draw orange border
+            paint.setColor(Color.parseColor("#FF6A00"));
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
+            paint.setStrokeWidth(4);
+            canvas.drawRect(2, 2, width - 2, height - 2, paint);
+            
+            // Draw Japanese text "初期化中" (Initializing)
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#FF6A00"));
+            paint.setTextSize(height / 5);
+            paint.setTextAlign(android.graphics.Paint.Align.CENTER);
+            canvas.drawText("初期化中", width / 2, height / 2 - height / 12, paint);
+            
+            // Draw English text "INITIALIZING..."
+            paint.setTextSize(height / 7);
+            paint.setColor(Color.parseColor("#FFCC00"));
+            canvas.drawText("INITIALIZING...", width / 2, height / 2 + height / 5, paint);
+            
+            return bmp;
+        } catch (Exception e) {
+            Log.e(TAG, "Error creating placeholder: " + e.getMessage());
+            return null;
+        }
     }
     
     /**
@@ -252,28 +362,6 @@ public class NervClockWidget extends AppWidgetProvider {
         } else {
             Log.d(TAG, "Widget is running, no restart needed");
         }
-    }
-
-    private void setupClickHandlers(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
-        RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_webview);
-        
-        // STOP button
-        views.setOnClickPendingIntent(R.id.btn_stop, 
-            getPendingIntent(context, ACTION_STOP, appWidgetId));
-        
-        // SLOW button
-        views.setOnClickPendingIntent(R.id.btn_slow, 
-            getPendingIntent(context, ACTION_SLOW, appWidgetId));
-        
-        // NORMAL button
-        views.setOnClickPendingIntent(R.id.btn_normal, 
-            getPendingIntent(context, ACTION_NORMAL, appWidgetId));
-        
-        // RACING button
-        views.setOnClickPendingIntent(R.id.btn_racing, 
-            getPendingIntent(context, ACTION_RACING, appWidgetId));
-        
-        appWidgetManager.updateAppWidget(appWidgetId, views);
     }
     
     private PendingIntent getPendingIntent(Context context, String action, int appWidgetId) {
@@ -482,9 +570,22 @@ public class NervClockWidget extends AppWidgetProvider {
             
             if (ids.length == 0) return;
 
-            Bitmap bmp = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888);
-            Canvas canvas = new Canvas(bmp);
-            webView.draw(canvas);
+            // Reuse bitmap if dimensions haven't changed
+            if (reusableBitmap == null || lastRenderWidth != renderWidth || lastRenderHeight != renderHeight) {
+                if (reusableBitmap != null) {
+                    reusableBitmap.recycle();
+                }
+                reusableBitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888);
+                reusableCanvas = new Canvas(reusableBitmap);
+                lastRenderWidth = renderWidth;
+                lastRenderHeight = renderHeight;
+                Log.d(TAG, "Created new reusable bitmap: " + renderWidth + "x" + renderHeight);
+            }
+            
+            // Clear and redraw
+            reusableBitmap.eraseColor(Color.TRANSPARENT);
+            webView.draw(reusableCanvas);
+            Bitmap bmp = reusableBitmap;
             
             // Check if bitmap is empty/transparent (WebView failed to render)
             if (isBitmapEmpty(bmp)) {
@@ -546,6 +647,15 @@ public class NervClockWidget extends AppWidgetProvider {
         // Remove all callbacks
         if (handler != null) {
             handler.removeCallbacksAndMessages(null);
+        }
+        
+        // Recycle reusable bitmap
+        if (reusableBitmap != null) {
+            reusableBitmap.recycle();
+            reusableBitmap = null;
+            reusableCanvas = null;
+            lastRenderWidth = 0;
+            lastRenderHeight = 0;
         }
         
         // Destroy WebView on main thread

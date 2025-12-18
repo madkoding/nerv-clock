@@ -10,6 +10,22 @@
     font-display: block;
 }
 
+@font-face {
+    font-family: 'Nimbus Sans';
+    src: url('fonts/NimbusSans-Regular.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Nimbus Sans';
+    src: url('fonts/NimbusSans-Bold.otf') format('opentype');
+    font-weight: bold;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
     --nerv-orange: #FF6A00;
     --nerv-orange-bright: #FF8C00;
@@ -34,7 +50,7 @@ html, body {
     width: 100%;
     height: 100%;
     background: transparent;
-    font-family: 'Courier New', 'Consolas', monospace;
+    font-family: 'Nimbus Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     overflow: hidden;
     user-select: none;
     -webkit-user-select: none;
@@ -366,7 +382,7 @@ html, body {
     border: 2px solid #3a3a30;
     border-radius: 2px;
     color: var(--nerv-green);
-    font-family: 'Courier New', monospace;
+    font-family: 'Nimbus Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     font-size: 2cqw;
     font-weight: bold;
     padding: 0.5% 0;
@@ -496,19 +512,45 @@ html, body {
     50% { opacity: 0.7; }
 }
 
-/* Depleted state message */
+/* Depleted state message - Evangelion style */
 .depleted-message {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    gap: 2cqw;
+    animation: depletedFlash 1s ease-in-out infinite;
+}
+
+.depleted-stripe {
+    width: 3cqw;
+    height: 80%;
+    background: repeating-linear-gradient(
+        -45deg,
+        #FF0000,
+        #FF0000 4px,
+        #1a1a1a 4px,
+        #1a1a1a 8px
+    );
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+}
+
+.depleted-content {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    animation: depletedFlash 1s ease-in-out infinite;
+    padding: 1cqw 3cqw;
+    border: 2px solid #FF0000;
+    background: rgba(255, 0, 0, 0.1);
+    box-shadow: 0 0 15px rgba(255, 0, 0, 0.3);
 }
 
 .depleted-jp {
-    font-family: 'Courier New', monospace;
-    font-size: 8cqw;
+    font-family: 'Nimbus Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 6cqw;
     font-weight: bold;
     color: #FF0000;
     text-shadow: 
@@ -519,8 +561,8 @@ html, body {
 }
 
 .depleted-en {
-    font-family: 'Courier New', monospace;
-    font-size: 6cqw;
+    font-family: 'Nimbus Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 4cqw;
     font-weight: bold;
     color: #FF0000;
     text-shadow: 
