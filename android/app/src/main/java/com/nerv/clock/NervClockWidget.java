@@ -76,15 +76,99 @@ public class NervClockWidget extends AppWidgetProvider {
     }
 
     @Override
+    public void onAppWidgetOptionsChanged(Context context, AppWidgetManager appWidgetManager, 
+            int appWidgetId, android.os.Bundle newOptions) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions);
+        
+        Log.d(TAG, "onAppWidgetOptionsChanged called for widget " + appWidgetId);
+        
+        // Get the new widget dimensions
+        int minWidth = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH);
+        int maxWidth = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH);
+        int minHeight = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT);
+        int maxHeight = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT);
+        
+        Log.d(TAG, "Widget options - minW: " + minWidth + ", maxW: " + maxWidth + 
+                   ", minH: " + minHeight + ", maxH: " + maxHeight);
+        
+        // Update render dimensions based on widget size
+        updateRenderDimensions(context, minWidth, minHeight, maxWidth, maxHeight);
+        
+        // Restart WebView with new dimensions
+        stopUpdates();
+        startWebViewUpdates(context.getApplicationContext());
+    }
+    
+    /**
+     * Update render dimensions maintaining the base aspect ratio (10:3).
+     * This ensures content doesn't stretch when widget is resized.
+     */
+    private static void updateRenderDimensions(Context context, int minWidthDp, int minHeightDp, 
+            int maxWidthDp, int maxHeightDp) {
+        DisplayMetrics dm = context.getResources().getDisplayMetrics();
+        
+        // Use max dimensions for better quality
+        int widgetWidthDp = maxWidthDp > 0 ? maxWidthDp : minWidthDp;
+        int widgetHeightDp = maxHeightDp > 0 ? maxHeightDp : minHeightDp;
+        
+        // If we have valid dimensions from options, use them
+        if (widgetWidthDp > 0 && widgetHeightDp > 0) {
+            // Convert dp to pixels
+            int widgetWidthPx = (int)(widgetWidthDp * dm.density);
+            int widgetHeightPx = (int)(widgetHeightDp * dm.density);
+            
+            // Calculate aspect ratio of widget vs base content
+            float baseAspectRatio = (float) BASE_WIDTH_DP / BASE_HEIGHT_DP; // 400/120 = 3.33
+            float widgetAspectRatio = (float) widgetWidthPx / widgetHeightPx;
+            
+            // Scale content to fit widget while maintaining aspect ratio
+            if (widgetAspectRatio > baseAspectRatio) {
+                // Widget is wider than content - height is the constraint
+                renderHeight = widgetHeightPx;
+                renderWidth = (int)(renderHeight * baseAspectRatio);
+            } else {
+                // Widget is taller than content - width is the constraint
+                renderWidth = widgetWidthPx;
+                renderHeight = (int)(renderWidth / baseAspectRatio);
+            }
+            
+            // Ensure minimum dimensions
+            renderWidth = Math.max(renderWidth, (int)(BASE_WIDTH_DP * dm.density));
+            renderHeight = Math.max(renderHeight, (int)(BASE_HEIGHT_DP * dm.density));
+            
+            Log.d(TAG, "Updated render dimensions: " + renderWidth + "x" + renderHeight + 
+                       " (widget: " + widgetWidthPx + "x" + widgetHeightPx + ")");
+        } else {
+            // Fallback to default calculation
+            renderWidth = Math.max((int)(BASE_WIDTH_DP * dm.density), BASE_WIDTH_DP);
+            renderHeight = Math.max((int)(BASE_HEIGHT_DP * dm.density), BASE_HEIGHT_DP);
+            Log.d(TAG, "Using default render dimensions: " + renderWidth + "x" + renderHeight);
+        }
+    }
+
+    @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
         Log.d(TAG, "onUpdate called with " + appWidgetIds.length + " widgets");
         
         appContext = context.getApplicationContext();
         
-        // Calculate render size based on screen density FIRST
+        // Calculate render size based on widget options if available
         DisplayMetrics dm = context.getResources().getDisplayMetrics();
-        renderWidth = Math.max((int)(BASE_WIDTH_DP * dm.density), BASE_WIDTH_DP);
-        renderHeight = Math.max((int)(BASE_HEIGHT_DP * dm.density), BASE_HEIGHT_DP);
+        
+        // Try to get dimensions from first widget's options
+        if (appWidgetIds.length > 0) {
+            android.os.Bundle options = appWidgetManager.getAppWidgetOptions(appWidgetIds[0]);
+            int minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH);
+            int minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT);
+            int maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH);
+            int maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT);
+            
+            updateRenderDimensions(context, minWidth, minHeight, maxWidth, maxHeight);
+        } else {
+            // Fallback: Calculate render size based on screen density
+            renderWidth = Math.max((int)(BASE_WIDTH_DP * dm.density), BASE_WIDTH_DP);
+            renderHeight = Math.max((int)(BASE_HEIGHT_DP * dm.density), BASE_HEIGHT_DP);
+        }
         
         Log.d(TAG, "Render size: " + renderWidth + "x" + renderHeight + " (density: " + dm.density + ")");
         

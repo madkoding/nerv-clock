@@ -105,6 +105,54 @@ html, body {
     box-shadow: 0 0 8px var(--nerv-red);
 }
 
+/* Pin button - desktop only (Tauri) */
+.pin-btn {
+    position: absolute;
+    top: 24px;
+    right: 2px;
+    width: 20px;
+    height: 20px;
+    background: rgba(0, 100, 0, 0.8);
+    border: 1px solid var(--nerv-green);
+    border-radius: 2px;
+    color: var(--nerv-orange);
+    font-size: 12px;
+    cursor: pointer;
+    z-index: 200;
+    -webkit-app-region: no-drag;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.15s;
+}
+
+.pin-btn.visible {
+    display: flex;
+}
+
+.pin-btn:hover {
+    background: var(--nerv-green);
+    color: white;
+    box-shadow: 0 0 8px var(--nerv-green);
+}
+
+.pin-btn.pinned {
+    background: var(--nerv-green);
+    color: white;
+    box-shadow: 0 0 8px var(--nerv-green);
+}
+
+.pin-btn svg {
+    width: 12px;
+    height: 12px;
+    transition: transform 0.2s;
+}
+
+.pin-btn.pinned svg {
+    transform: rotate(45deg);
+}
+
 /* Hexagon pattern background */
 .hex-pattern {
     position: absolute;

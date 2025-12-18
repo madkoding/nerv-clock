@@ -349,6 +349,45 @@ function setupCloseButton() {
     });
 }
 
+// Pin button handler (Tauri desktop only) - toggle always on top
+function setupPinButton() {
+    const pinBtn = document.getElementById('pin-btn');
+    if (!pinBtn) return;
+    
+    // Only show pin button in Tauri (desktop apps)
+    if (!window.__TAURI__) {
+        return;
+    }
+    
+    // Show the button
+    pinBtn.classList.add('visible');
+    
+    // Start as pinned (always on top is default)
+    pinBtn.classList.add('pinned');
+    
+    pinBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (window.__TAURI__) {
+            try {
+                const { getCurrentWindow } = window.__TAURI__.window;
+                const win = getCurrentWindow();
+                
+                // Toggle always on top
+                const isPinned = pinBtn.classList.contains('pinned');
+                await win.setAlwaysOnTop(!isPinned);
+                
+                // Update button state
+                pinBtn.classList.toggle('pinned');
+                pinBtn.title = isPinned ? 'Pin on top' : 'Unpin';
+            } catch (err) {
+                console.log('Toggle always on top failed:', err);
+            }
+        }
+    });
+}
+
 // Setup window dragging for Tauri desktop
 function setupWindowDrag() {
     if (!window.__TAURI__) return;
@@ -360,6 +399,7 @@ function setupWindowDrag() {
         // Don't drag if clicking on buttons or close button
         if (e.target.closest('.ctrl-btn') || 
             e.target.closest('.close-btn') || 
+            e.target.closest('.pin-btn') ||
             e.target.closest('.control-bar')) {
             return;
         }
@@ -380,11 +420,13 @@ function setupWindowDrag() {
 document.addEventListener('DOMContentLoaded', () => {
     window.nervClock = new NervClock();
     setupCloseButton();
+    setupPinButton();
     setupWindowDrag();
 });
 
 if (document.readyState !== 'loading') {
     window.nervClock = new NervClock();
     setupCloseButton();
+    setupPinButton();
     setupWindowDrag();
 }
