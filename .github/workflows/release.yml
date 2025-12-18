@@ -202,13 +202,6 @@ jobs:
           find artifacts -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.apk" \) -exec cp {} release/ \;
           ls -la release/
 
-      - name: Checkout releases repo
-        uses: actions/checkout@v4
-        with:
-          repository: madkoding/nerv-clock-releases
-          token: ${{ secrets.RELEASE_TOKEN }}
-          path: releases-repo
-
       - name: Create release in public repo
         uses: softprops/action-gh-release@v1
         with:
