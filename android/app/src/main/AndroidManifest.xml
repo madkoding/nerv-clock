@@ -6,6 +6,11 @@
         android:minSdkVersion="21"
         android:targetSdkVersion="30" />
     
+    <!-- Permissions for boot and wake -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    
     <application
         android:allowBackup="false"
         android:label="@string/app_name"
@@ -24,6 +29,7 @@
                 <action android:name="com.nerv.clock.ACTION_SLOW" />
                 <action android:name="com.nerv.clock.ACTION_NORMAL" />
                 <action android:name="com.nerv.clock.ACTION_RACING" />
+                <action android:name="com.nerv.clock.ACTION_WAKE_UPDATE" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
@@ -31,6 +37,29 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_info" />
+        </receiver>
+
+        <!-- Boot Receiver to restart widget after device reboot -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Screen State Receiver to restart widget when screen turns on -->
+        <receiver
+            android:name=".ScreenReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SCREEN_ON" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+            </intent-filter>
         </receiver>
 
     </application>

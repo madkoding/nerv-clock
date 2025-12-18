@@ -1,5 +1,6 @@
 package com.nerv.clock;
 
+import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
@@ -12,6 +13,8 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.os.SystemClock;
 import android.view.View;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -23,25 +26,46 @@ import android.util.DisplayMetrics;
 public class NervClockWidget extends AppWidgetProvider {
 
     private static final String TAG = "NervClockWidget";
-    private static Handler handler = new Handler(Looper.getMainLooper());
+    private static Handler handler = null;
     private static WebView webView;
     private static boolean isUpdating = false;
     private static boolean pageLoaded = false;
+    private static boolean isCreatingWebView = false;
     private static final int UPDATE_INTERVAL = 50;
+    private static final int PAGE_LOAD_TIMEOUT = 10000; // 10 seconds timeout for page load
+    private static final int WEBVIEW_INIT_DELAY = 500; // Delay before creating WebView
+    private static final int MAX_RETRY_COUNT = 3;
+    private static int retryCount = 0;
     private static Context appContext;
     private static long lastAppUpdateTime = 0;
+    private static long lastWakeCheck = 0;
+    private static long webViewCreationTime = 0;
+    private static final long WAKE_CHECK_INTERVAL = 30000; // 30 seconds
+    private static final long ALARM_INTERVAL = 60000; // 1 minute
     
     // Actions for buttons
     public static final String ACTION_STOP = "com.nerv.clock.ACTION_STOP";
     public static final String ACTION_SLOW = "com.nerv.clock.ACTION_SLOW";
     public static final String ACTION_NORMAL = "com.nerv.clock.ACTION_NORMAL";
     public static final String ACTION_RACING = "com.nerv.clock.ACTION_RACING";
+    public static final String ACTION_WAKE_UPDATE = "com.nerv.clock.ACTION_WAKE_UPDATE";
     
     // Base render size in dp
     private static final int BASE_WIDTH_DP = 400;
     private static final int BASE_HEIGHT_DP = 120;
     private static int renderWidth = 400;
     private static int renderHeight = 120;
+    
+    /**
+     * Get or create the handler on the main looper.
+     * This ensures we always have a valid handler even after process restart.
+     */
+    private static synchronized Handler getHandler() {
+        if (handler == null) {
+            handler = new Handler(Looper.getMainLooper());
+        }
+        return handler;
+    }
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
@@ -57,19 +81,85 @@ public class NervClockWidget extends AppWidgetProvider {
         if (appReinstalled) {
             Log.d(TAG, "App reinstall detected, forcing WebView recreation");
             stopUpdates();
+            retryCount = 0; // Reset retry count on reinstall
         }
         
         // Calculate render size based on screen density
         DisplayMetrics dm = context.getResources().getDisplayMetrics();
-        renderWidth = (int)(BASE_WIDTH_DP * dm.density);
-        renderHeight = (int)(BASE_HEIGHT_DP * dm.density);
+        renderWidth = Math.max((int)(BASE_WIDTH_DP * dm.density), BASE_WIDTH_DP);
+        renderHeight = Math.max((int)(BASE_HEIGHT_DP * dm.density), BASE_HEIGHT_DP);
+        
+        Log.d(TAG, "Render size: " + renderWidth + "x" + renderHeight + " (density: " + dm.density + ")");
         
         // Setup click handlers for each widget
         for (int appWidgetId : appWidgetIds) {
             setupClickHandlers(context, appWidgetManager, appWidgetId);
         }
         
-        startWebViewUpdates(appContext);
+        // Schedule periodic alarm to keep widget alive
+        scheduleAlarm(context);
+        
+        // Start WebView with a small delay to ensure everything is initialized
+        final Context ctx = appContext;
+        getHandler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                startWebViewUpdates(ctx);
+            }
+        }, WEBVIEW_INIT_DELAY);
+    }
+    
+    /**
+     * Schedule a periodic alarm to wake up the widget and check if it needs to be restarted.
+     * This ensures the widget stays alive even after long periods of inactivity.
+     */
+    private static void scheduleAlarm(Context context) {
+        try {
+            AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            Intent intent = new Intent(context, NervClockWidget.class);
+            intent.setAction(ACTION_WAKE_UPDATE);
+            
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                context, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            
+            // Cancel any existing alarm
+            alarmManager.cancel(pendingIntent);
+            
+            // Schedule repeating alarm
+            alarmManager.setRepeating(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + ALARM_INTERVAL,
+                ALARM_INTERVAL,
+                pendingIntent
+            );
+            
+            Log.d(TAG, "Alarm scheduled for periodic wake updates");
+        } catch (Exception e) {
+            Log.e(TAG, "Error scheduling alarm: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Cancel the periodic alarm when widget is disabled.
+     */
+    private static void cancelAlarm(Context context) {
+        try {
+            AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            Intent intent = new Intent(context, NervClockWidget.class);
+            intent.setAction(ACTION_WAKE_UPDATE);
+            
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                context, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            
+            alarmManager.cancel(pendingIntent);
+            Log.d(TAG, "Alarm cancelled");
+        } catch (Exception e) {
+            Log.e(TAG, "Error cancelling alarm: " + e.getMessage());
+        }
     }
     
     private static long getAppUpdateTime(Context context) {
@@ -107,6 +197,13 @@ public class NervClockWidget extends AppWidgetProvider {
             return;
         }
         
+        // Handle wake update action (from alarm or screen on)
+        if (ACTION_WAKE_UPDATE.equals(action)) {
+            Log.d(TAG, "Wake update received, checking widget state");
+            handleWakeUpdate(context);
+            return;
+        }
+        
         super.onReceive(context, intent);
         
         switch (action) {
@@ -122,6 +219,38 @@ public class NervClockWidget extends AppWidgetProvider {
             case ACTION_RACING:
                 executeJS("nervClock.setMode('racing')");
                 break;
+        }
+    }
+    
+    /**
+     * Handle wake update - check if widget is running and restart if needed.
+     */
+    private void handleWakeUpdate(Context context) {
+        long now = System.currentTimeMillis();
+        
+        // Avoid checking too frequently
+        if (now - lastWakeCheck < WAKE_CHECK_INTERVAL) {
+            Log.d(TAG, "Wake check skipped, too soon since last check");
+            return;
+        }
+        lastWakeCheck = now;
+        
+        appContext = context.getApplicationContext();
+        
+        // Check if WebView is in a valid state
+        if (!isUpdating || webView == null || !pageLoaded) {
+            Log.d(TAG, "Widget not running, restarting...");
+            
+            // Get all widget ids and trigger update
+            AppWidgetManager mgr = AppWidgetManager.getInstance(context);
+            int[] ids = mgr.getAppWidgetIds(
+                new android.content.ComponentName(context, NervClockWidget.class));
+            
+            if (ids.length > 0) {
+                onUpdate(context, mgr, ids);
+            }
+        } else {
+            Log.d(TAG, "Widget is running, no restart needed");
         }
     }
 
@@ -157,7 +286,7 @@ public class NervClockWidget extends AppWidgetProvider {
     
     private static void executeJS(final String script) {
         if (webView != null && pageLoaded) {
-            handler.post(new Runnable() {
+            getHandler().post(new Runnable() {
                 @Override
                 public void run() {
                     if (webView != null) {
@@ -172,29 +301,53 @@ public class NervClockWidget extends AppWidgetProvider {
     @Override
     public void onEnabled(Context context) {
         super.onEnabled(context);
+        Log.d(TAG, "Widget enabled");
+        scheduleAlarm(context);
     }
 
     @Override
     public void onDisabled(Context context) {
         super.onDisabled(context);
+        Log.d(TAG, "Widget disabled");
+        cancelAlarm(context);
         stopUpdates();
     }
 
     private static void startWebViewUpdates(final Context context) {
+        if (context == null) {
+            Log.e(TAG, "Context is null, cannot start WebView");
+            return;
+        }
+        
         if (isUpdating && webView != null && pageLoaded) {
             Log.d(TAG, "Already updating, skipping");
             return;
         }
         
+        if (isCreatingWebView) {
+            Log.d(TAG, "WebView creation already in progress, skipping");
+            return;
+        }
+        
         // Always create fresh WebView
         stopUpdates();
+        isCreatingWebView = true;
+        webViewCreationTime = System.currentTimeMillis();
         
-        handler.post(new Runnable() {
+        getHandler().post(new Runnable() {
             @Override
             public void run() {
                 try {
                     Log.d(TAG, "Creating WebView " + renderWidth + "x" + renderHeight);
-                    webView = new WebView(context);
+                    
+                    // Ensure we have valid dimensions
+                    if (renderWidth <= 0 || renderHeight <= 0) {
+                        Log.e(TAG, "Invalid render dimensions, using defaults");
+                        renderWidth = BASE_WIDTH_DP;
+                        renderHeight = BASE_HEIGHT_DP;
+                    }
+                    
+                    webView = new WebView(context.getApplicationContext());
                     
                     webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
                     webView.setBackgroundColor(Color.parseColor("#0d0900"));
@@ -203,9 +356,14 @@ public class NervClockWidget extends AppWidgetProvider {
                     settings.setJavaScriptEnabled(true);
                     settings.setDomStorageEnabled(true);
                     settings.setAllowFileAccess(true);
+                    settings.setAllowFileAccessFromFileURLs(true);
+                    settings.setAllowUniversalAccessFromFileURLs(true);
                     settings.setUseWideViewPort(true);
                     settings.setLoadWithOverviewMode(true);
                     settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+                    settings.setBlockNetworkLoads(true);
+                    settings.setBlockNetworkImage(true);
+                    settings.setLoadsImagesAutomatically(true);
                     
                     webView.setInitialScale(100);
                     
@@ -218,36 +376,83 @@ public class NervClockWidget extends AppWidgetProvider {
                         @Override
                         public void onPageFinished(WebView view, String url) {
                             Log.d(TAG, "Page loaded!");
+                            isCreatingWebView = false;
                             pageLoaded = true;
                             isUpdating = true;
+                            retryCount = 0; // Reset retry count on success
                             scheduleUpdate(context);
                         }
                         
                         @Override
                         public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                            Log.e(TAG, "WebView error: " + description);
-                            // Try to reload after error
-                            handler.postDelayed(new Runnable() {
-                                @Override
-                                public void run() {
-                                    startWebViewUpdates(context);
-                                }
-                            }, 1000);
+                            Log.e(TAG, "WebView error: " + errorCode + " - " + description);
+                            isCreatingWebView = false;
+                            retryWithBackoff(context);
                         }
                     });
                     
+                    // Set timeout for page load
+                    schedulePageLoadTimeout(context);
+                    
                     // Clear cache and load fresh
                     webView.clearCache(true);
-                    webView.loadUrl("file:///android_asset/widget.html?t=" + System.currentTimeMillis());
+                    String url = "file:///android_asset/widget.html?t=" + System.currentTimeMillis();
+                    Log.d(TAG, "Loading URL: " + url);
+                    webView.loadUrl(url);
+                    
                 } catch (Exception e) {
                     Log.e(TAG, "Error creating WebView: " + e.getMessage());
+                    e.printStackTrace();
+                    isCreatingWebView = false;
+                    retryWithBackoff(context);
                 }
             }
         });
     }
+    
+    /**
+     * Schedule a timeout for page load. If page doesn't load in time, restart.
+     */
+    private static void schedulePageLoadTimeout(final Context context) {
+        getHandler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!pageLoaded && isCreatingWebView) {
+                    Log.w(TAG, "Page load timeout, retrying...");
+                    isCreatingWebView = false;
+                    retryWithBackoff(context);
+                }
+            }
+        }, PAGE_LOAD_TIMEOUT);
+    }
+    
+    /**
+     * Retry WebView creation with exponential backoff.
+     */
+    private static void retryWithBackoff(final Context context) {
+        if (retryCount >= MAX_RETRY_COUNT) {
+            Log.e(TAG, "Max retries reached, will retry on next wake update");
+            retryCount = 0;
+            stopUpdates();
+            return;
+        }
+        
+        retryCount++;
+        int delay = 1000 * retryCount; // 1s, 2s, 3s
+        Log.d(TAG, "Retrying in " + delay + "ms (attempt " + retryCount + "/" + MAX_RETRY_COUNT + ")");
+        
+        stopUpdates();
+        
+        getHandler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                startWebViewUpdates(context);
+            }
+        }, delay);
+    }
 
     private static void scheduleUpdate(final Context context) {
-        handler.postDelayed(new Runnable() {
+        getHandler().postDelayed(new Runnable() {
             @Override
             public void run() {
                 if (!isUpdating || webView == null) return;
@@ -259,12 +464,14 @@ public class NervClockWidget extends AppWidgetProvider {
 
     private static void updateWidget(Context context) {
         if (context == null) context = appContext;
-        if (context == null) return;
+        if (context == null) {
+            Log.e(TAG, "No context available for widget update");
+            return;
+        }
         
         if (!pageLoaded || webView == null) {
             Log.w(TAG, "WebView not ready, attempting restart");
-            stopUpdates();
-            startWebViewUpdates(context.getApplicationContext());
+            retryWithBackoff(context.getApplicationContext());
             return;
         }
         
@@ -281,9 +488,12 @@ public class NervClockWidget extends AppWidgetProvider {
             
             // Check if bitmap is empty/transparent (WebView failed to render)
             if (isBitmapEmpty(bmp)) {
-                Log.w(TAG, "Empty bitmap detected, recreating WebView");
-                stopUpdates();
-                startWebViewUpdates(context.getApplicationContext());
+                long timeSinceCreation = System.currentTimeMillis() - webViewCreationTime;
+                // Give WebView some time to render before considering it failed
+                if (timeSinceCreation > 3000) { // 3 seconds grace period
+                    Log.w(TAG, "Empty bitmap detected after " + timeSinceCreation + "ms, recreating WebView");
+                    retryWithBackoff(context.getApplicationContext());
+                }
                 return;
             }
 
@@ -305,9 +515,9 @@ public class NervClockWidget extends AppWidgetProvider {
             }
         } catch (Exception e) {
             Log.e(TAG, "Error updating widget: " + e.getMessage());
+            e.printStackTrace();
             // Try to recover
-            stopUpdates();
-            startWebViewUpdates(context.getApplicationContext());
+            retryWithBackoff(context.getApplicationContext());
         }
     }
     
@@ -331,10 +541,28 @@ public class NervClockWidget extends AppWidgetProvider {
     private static void stopUpdates() {
         isUpdating = false;
         pageLoaded = false;
-        handler.removeCallbacksAndMessages(null);
+        isCreatingWebView = false;
+        
+        // Remove all callbacks
+        if (handler != null) {
+            handler.removeCallbacksAndMessages(null);
+        }
+        
+        // Destroy WebView on main thread
         if (webView != null) {
-            webView.destroy();
+            final WebView wv = webView;
             webView = null;
+            getHandler().post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        wv.stopLoading();
+                        wv.destroy();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error destroying WebView: " + e.getMessage());
+                    }
+                }
+            });
         }
     }
 }

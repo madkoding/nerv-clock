@@ -188,6 +188,11 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -202,29 +207,58 @@ jobs:
           find artifacts -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.apk" \) -exec cp {} release/ \;
           ls -la release/
 
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get current and previous tag
+          CURRENT_TAG="${{ github.ref_name }}"
+          PREVIOUS_TAG=$(git tag --sort=-creatordate | grep -v "$CURRENT_TAG" | head -1)
+          
+          echo "Current tag: $CURRENT_TAG"
+          echo "Previous tag: $PREVIOUS_TAG"
+          
+          # Start changelog with header
+          cat > changelog.md << 'EOF'
+          ## 🎌 NERV Clock Release
+          
+          Evangelion-style clock widget for desktop and Android.
+          
+          ### 📥 Downloads
+          - **Android**: `NervClock.apk`
+          - **Linux**: `.AppImage`, `.deb`, `.rpm`
+          - **Windows**: `.exe`, `.msi`
+          - **macOS**: `.dmg`
+          
+          ### ✨ Features
+          - NERV/Evangelion aesthetic
+          - Pomodoro timer (NORMAL 5min, SLOW 25min)
+          - Color warnings (yellow at 4min, red at 1min)
+          - Desktop: transparent, always-on-top, draggable
+          - Android: home screen widget
+          
+          EOF
+          
+          # Generate changes section
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "### 📋 Changes since $PREVIOUS_TAG" >> changelog.md
+            echo "" >> changelog.md
+            git log --pretty=format:"- %s" "$PREVIOUS_TAG..$CURRENT_TAG" >> changelog.md
+          else
+            echo "### 📋 Initial Release" >> changelog.md
+            echo "" >> changelog.md
+            echo "- First public release" >> changelog.md
+          fi
+          
+          echo "" >> changelog.md
+          cat changelog.md
+
       - name: Create release in public repo
         uses: softprops/action-gh-release@v1
         with:
           repository: madkoding/nerv-clock-releases
           tag_name: ${{ github.ref_name }}
           name: 'NERV Clock ${{ github.ref_name }}'
-          body: |
-            ## 🎌 NERV Clock ${{ github.ref_name }}
-            
-            Evangelion-style clock widget for desktop and Android.
-            
-            ### Downloads
-            - **Android**: `NervClock.apk`
-            - **Linux**: `.AppImage`, `.deb`, `.rpm`
-            - **Windows**: `.exe`, `.msi`
-            - **macOS**: `.dmg`
-            
-            ### Features
-            - NERV/Evangelion aesthetic
-            - Pomodoro timer (NORMAL 5min, SLOW 25min)
-            - Color warnings (yellow at 4min, red at 1min)
-            - Desktop: transparent, always-on-top, draggable
-            - Android: home screen widget
+          body_path: changelog.md
           files: release/*
           draft: false
           prerelease: false
