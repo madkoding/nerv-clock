@@ -159,7 +159,8 @@ jobs:
               @"$BUILD_DIR/sources.txt"
           
           echo "📱 Creating DEX..."
-          "$BUILD_TOOLS/d8" --output "$OBJ_DIR" "$CLASSES_DIR"/*.class "$CLASSES_DIR"/com/nerv/clock/*.class
+          find "$CLASSES_DIR" -name "*.class" > "$BUILD_DIR/classes.txt"
+          "$BUILD_TOOLS/d8" --output "$OBJ_DIR" $(cat "$BUILD_DIR/classes.txt")
           
           echo "📦 Creating APK..."
           cp "$OBJ_DIR/app.apk.unaligned" "$OBJ_DIR/app.apk.tmp"
