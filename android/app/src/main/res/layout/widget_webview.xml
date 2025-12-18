@@ -13,8 +13,8 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_centerInParent="true"
-        android:scaleType="fitCenter"
-        android:adjustViewBounds="true"
+        android:scaleType="fitXY"
+        android:adjustViewBounds="false"
         android:background="#0d0900"
         android:src="@drawable/widget_preview"
         android:contentDescription="@string/widget_name" />

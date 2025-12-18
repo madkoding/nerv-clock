@@ -7,7 +7,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# SDK paths - Updated to support Android 15 (API 35)
+# SDK paths - Updated to support Android 11-16 (API 30-36)
+# Compile with latest SDK for newest features, minSdkVersion ensures backward compatibility
 SDK_PATH="$HOME/Android/Sdk"
 BUILD_TOOLS="$SDK_PATH/build-tools/35.0.0"
 PLATFORM="$SDK_PATH/platforms/android-35"
@@ -71,8 +72,9 @@ javac -source 1.8 -target 1.8 \
 
 echo "📱 Creando DEX..."
 # Use d8 for SDK 34+, fallback to dx for older versions
+# --min-api 30 ensures DEX is compatible with Android 11+ while using latest bytecode
 if [ -f "$BUILD_TOOLS/d8" ]; then
-    "$BUILD_TOOLS/d8" --output "$OBJ_DIR" $(find "$CLASSES_DIR" -name "*.class")
+    "$BUILD_TOOLS/d8" --min-api 30 --lib "$PLATFORM/android.jar" --output "$OBJ_DIR" $(find "$CLASSES_DIR" -name "*.class")
 else
     "$BUILD_TOOLS/dx" --dex --output="$OBJ_DIR/classes.dex" "$CLASSES_DIR"
 fi
@@ -90,11 +92,11 @@ ASSETS_DIR="app/src/main/assets"
 rm -rf "$ASSETS_DIR"
 mkdir -p "$ASSETS_DIR/fonts"
 cp ../ui/index.html "$ASSETS_DIR/widget.html"
-# Fix viewport for Android widget (needs fixed width for bitmap rendering)
-sed -i 's/width=device-width/width=400/g' "$ASSETS_DIR/widget.html"
+# Use device-width viewport so content fills the entire widget area
+sed -i 's/width=device-width/width=device-width/g' "$ASSETS_DIR/widget.html"
 cp ../ui/style.css "$ASSETS_DIR/"
 # Fix CSS units for Android WebView (cqw not supported, use vw instead)
-# With viewport width=400, vw units work correctly
+# vw/vh units will work based on the WebView dimensions
 sed -i 's/cqw/vw/g' "$ASSETS_DIR/style.css"
 sed -i 's/cqh/vh/g' "$ASSETS_DIR/style.css"
 # Remove container queries completely (not supported in Android WebView)
@@ -103,21 +105,17 @@ sed -i 's/container-name: clock;//g' "$ASSETS_DIR/style.css"
 # Remove @container blocks entirely (they cause parsing errors in old WebViews)
 # This removes @container ... { ... } blocks
 sed -i '/@container/,/^}/d' "$ASSETS_DIR/style.css"
-# Increase font sizes for Android widget (values are larger for better visibility)
-# Use more specific patterns to avoid replacing wrong values
-# segment-digit main: 12vw -> 13vw (line ~272)
-sed -i '0,/font-size: 12vw/{s/font-size: 12vw/font-size: 13vw/}' "$ASSETS_DIR/style.css"
-# segment-digit.small: first 8vw after line 300 -> 8vw
-sed -i ':a;N;$!ba;s/font-size: 8vw/font-size: 8vw/1' "$ASSETS_DIR/style.css"
-# colon: 10vw -> 10vw (first occurrence)
-sed -i '0,/font-size: 10vw/{s/font-size: 10vw/font-size: 10vw/}' "$ASSETS_DIR/style.css"
-# Also update the @supports fallback values (these are what Android actually uses!)
-# fallback segment-digit: 9vw -> 13vw
-sed -i 's/font-size: 9vw/font-size: 13vw/g' "$ASSETS_DIR/style.css"
-# fallback segment-digit.small and small-colon: 6vw -> 8vw
-sed -i 's/font-size: 6vw/font-size: 8vw/g' "$ASSETS_DIR/style.css"
-# fallback colon: remaining 8vw -> 10vw
-sed -i 's/font-size: 8vw/font-size: 10vw/g' "$ASSETS_DIR/style.css"
+# Change clock digits from vw to vmin so they scale with the smaller dimension
+# vmin = minimum of vw and vh, so it adapts to both width AND height
+# segment-digit main font: vw -> vmin
+sed -i 's/font-size: 12vw/font-size: 28vmin/g' "$ASSETS_DIR/style.css"
+sed -i 's/font-size: 13vw/font-size: 28vmin/g' "$ASSETS_DIR/style.css"
+# segment-digit.small and colon: vw -> vmin
+sed -i 's/font-size: 10vw/font-size: 22vmin/g' "$ASSETS_DIR/style.css"
+sed -i 's/font-size: 8vw/font-size: 18vmin/g' "$ASSETS_DIR/style.css"
+# Also update the @supports fallback values
+sed -i 's/font-size: 9vw/font-size: 28vmin/g' "$ASSETS_DIR/style.css"
+sed -i 's/font-size: 6vw/font-size: 18vmin/g' "$ASSETS_DIR/style.css"
 cp ../ui/clock.js "$ASSETS_DIR/"
 cp ../ui/fonts/dseg7.ttf "$ASSETS_DIR/fonts/" 2>/dev/null || true
 cp ../ui/fonts/dseg7.woff "$ASSETS_DIR/fonts/" 2>/dev/null || true

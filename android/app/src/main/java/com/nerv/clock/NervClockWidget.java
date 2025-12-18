@@ -37,7 +37,7 @@ public class NervClockWidget extends AppWidgetProvider {
     private static Canvas reusableCanvas = null;
     private static int lastRenderWidth = 0;
     private static int lastRenderHeight = 0;
-    private static final int UPDATE_INTERVAL = 33; // ~30 fps
+    private static final int UPDATE_INTERVAL = 75; // ~13 fps (battery saving)
     private static final int PAGE_LOAD_TIMEOUT = 10000; // 10 seconds timeout for page load
     private static final int WEBVIEW_INIT_DELAY = 100; // Reduced delay before creating WebView
     private static final int MAX_RETRY_COUNT = 3;
@@ -100,8 +100,8 @@ public class NervClockWidget extends AppWidgetProvider {
     }
     
     /**
-     * Update render dimensions maintaining the base aspect ratio (10:3).
-     * This ensures content doesn't stretch when widget is resized.
+     * Update render dimensions to match the widget size exactly.
+     * The HTML/CSS content will handle its own aspect ratio internally.
      */
     private static void updateRenderDimensions(Context context, int minWidthDp, int minHeightDp, 
             int maxWidthDp, int maxHeightDp) {
@@ -111,33 +111,18 @@ public class NervClockWidget extends AppWidgetProvider {
         int widgetWidthDp = maxWidthDp > 0 ? maxWidthDp : minWidthDp;
         int widgetHeightDp = maxHeightDp > 0 ? maxHeightDp : minHeightDp;
         
-        // If we have valid dimensions from options, use them
+        // If we have valid dimensions from options, use them exactly
         if (widgetWidthDp > 0 && widgetHeightDp > 0) {
-            // Convert dp to pixels
-            int widgetWidthPx = (int)(widgetWidthDp * dm.density);
-            int widgetHeightPx = (int)(widgetHeightDp * dm.density);
+            // Convert dp to pixels - use exact widget size
+            renderWidth = (int)(widgetWidthDp * dm.density);
+            renderHeight = (int)(widgetHeightDp * dm.density);
             
-            // Calculate aspect ratio of widget vs base content
-            float baseAspectRatio = (float) BASE_WIDTH_DP / BASE_HEIGHT_DP; // 400/120 = 3.33
-            float widgetAspectRatio = (float) widgetWidthPx / widgetHeightPx;
-            
-            // Scale content to fit widget while maintaining aspect ratio
-            if (widgetAspectRatio > baseAspectRatio) {
-                // Widget is wider than content - height is the constraint
-                renderHeight = widgetHeightPx;
-                renderWidth = (int)(renderHeight * baseAspectRatio);
-            } else {
-                // Widget is taller than content - width is the constraint
-                renderWidth = widgetWidthPx;
-                renderHeight = (int)(renderWidth / baseAspectRatio);
-            }
-            
-            // Ensure minimum dimensions
-            renderWidth = Math.max(renderWidth, (int)(BASE_WIDTH_DP * dm.density));
-            renderHeight = Math.max(renderHeight, (int)(BASE_HEIGHT_DP * dm.density));
+            // Ensure minimum dimensions for readability
+            renderWidth = Math.max(renderWidth, (int)(180 * dm.density));
+            renderHeight = Math.max(renderHeight, (int)(60 * dm.density));
             
             Log.d(TAG, "Updated render dimensions: " + renderWidth + "x" + renderHeight + 
-                       " (widget: " + widgetWidthPx + "x" + widgetHeightPx + ")");
+                       " (widget dp: " + widgetWidthDp + "x" + widgetHeightDp + ", density: " + dm.density + ")");
         } else {
             // Fallback to default calculation
             renderWidth = Math.max((int)(BASE_WIDTH_DP * dm.density), BASE_WIDTH_DP);

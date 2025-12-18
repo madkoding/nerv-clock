@@ -333,7 +333,7 @@ html, body {
 /* 7-Segment style digits - RESPONSIVE to container WIDTH */
 .segment-digit {
     font-family: 'DSEG7', 'Consolas', monospace;
-    font-size: 13vw;
+    font-size: 28vmin;
     font-weight: normal;
     color: var(--nerv-orange);
     text-shadow: 
@@ -382,7 +382,7 @@ html, body {
 }
 
 .segment-digit.small {
-    font-size: 10vw;
+    font-size: 18vmin;
 }
 
 .segment-digit.small::before {
@@ -391,7 +391,7 @@ html, body {
 
 .colon {
     font-family: 'DSEG7', 'Courier New', monospace;
-    font-size: 10vw;
+    font-size: 22vmin;
     font-weight: normal;
     color: var(--nerv-orange);
     text-shadow: 0 0 0.5vw var(--nerv-orange-glow);
@@ -401,7 +401,7 @@ html, body {
 }
 
 .small-colon {
-    font-size: 10vw;
+    font-size: 18vmin;
     animation: none;
 }
 
@@ -494,16 +494,16 @@ html, body {
 /* Fallback for browsers without container queries */
 @supports not (container-type: size) {
     .segment-digit {
-        font-size: 13vw;
+        font-size: 28vmin;
     }
     .segment-digit.small {
-        font-size: 10vw;
+        font-size: 18vmin;
     }
     .colon {
-        font-size: 10vw;
+        font-size: 18vmin;
     }
     .small-colon {
-        font-size: 10vw;
+        font-size: 18vmin;
     }
 }
 
