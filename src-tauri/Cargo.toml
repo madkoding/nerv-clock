@@ -1,6 +1,6 @@
 [package]
 name = "nerv-clock"
-version = "1.0.1"
+version = "1.0.6"
 description = "NERV Chronometer - Evangelion Style Clock Widget"
 authors = ["NERV"]
 edition = "2021"
