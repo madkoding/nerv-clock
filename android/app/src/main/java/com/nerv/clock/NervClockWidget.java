@@ -224,6 +224,7 @@ public class NervClockWidget extends AppWidgetProvider {
     /**
      * Schedule a periodic alarm to wake up the widget and check if it needs to be restarted.
      * This ensures the widget stays alive even after long periods of inactivity.
+     * Updated for Android 12+ compatibility.
      */
     private static void scheduleAlarm(Context context) {
         try {
@@ -239,15 +240,27 @@ public class NervClockWidget extends AppWidgetProvider {
             // Cancel any existing alarm
             alarmManager.cancel(pendingIntent);
             
-            // Schedule repeating alarm
-            alarmManager.setRepeating(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                SystemClock.elapsedRealtime() + ALARM_INTERVAL,
-                ALARM_INTERVAL,
-                pendingIntent
-            );
-            
-            Log.d(TAG, "Alarm scheduled for periodic wake updates");
+            // For Android 12+ (API 31+), use setAndAllowWhileIdle for better battery optimization
+            // For older versions, use setRepeating
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                // On Android 12+, setRepeating behaves like setInexactRepeating
+                // Use setAndAllowWhileIdle for more reliable updates
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + ALARM_INTERVAL,
+                    pendingIntent
+                );
+                Log.d(TAG, "Alarm scheduled with setAndAllowWhileIdle (Android 12+)");
+            } else {
+                // Schedule repeating alarm for older versions
+                alarmManager.setRepeating(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + ALARM_INTERVAL,
+                    ALARM_INTERVAL,
+                    pendingIntent
+                );
+                Log.d(TAG, "Alarm scheduled with setRepeating (Android 11 and below)");
+            }
         } catch (Exception e) {
             Log.e(TAG, "Error scheduling alarm: " + e.getMessage());
         }
@@ -343,11 +356,20 @@ public class NervClockWidget extends AppWidgetProvider {
         // Avoid checking too frequently
         if (now - lastWakeCheck < WAKE_CHECK_INTERVAL) {
             Log.d(TAG, "Wake check skipped, too soon since last check");
+            // Still reschedule alarm for Android 12+
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                scheduleAlarm(context);
+            }
             return;
         }
         lastWakeCheck = now;
         
         appContext = context.getApplicationContext();
+        
+        // Re-schedule alarm for Android 12+ (since setAndAllowWhileIdle is not repeating)
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            scheduleAlarm(context);
+        }
         
         // Check if WebView is in a valid state
         if (!isUpdating || webView == null || !pageLoaded) {
