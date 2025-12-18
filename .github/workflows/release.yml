@@ -28,6 +28,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Update version in files
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          
+          # Update package.json
+          sed -i.bak 's/"version": "[^"]*"/"version": "'"$VERSION"'"/' package.json
+          
+          # Update tauri.conf.json
+          sed -i.bak 's/"version": "[^"]*"/"version": "'"$VERSION"'"/' src-tauri/tauri.conf.json
+          
+          # Update Cargo.toml (only the package version, not dependencies)
+          sed -i.bak '0,/^version = "[^"]*"/s//version = "'"$VERSION"'"/' src-tauri/Cargo.toml
+          
+          # Clean up backup files
+          rm -f package.json.bak src-tauri/tauri.conf.json.bak src-tauri/Cargo.toml.bak
+          
+          echo "Updated versions to $VERSION"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -68,6 +95,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
 
       - name: Setup Java
         uses: actions/setup-java@v4
