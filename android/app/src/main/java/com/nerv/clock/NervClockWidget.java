@@ -552,6 +552,7 @@ public class NervClockWidget extends AppWidgetProvider {
                     settings.setJavaScriptEnabled(true);
                     settings.setDomStorageEnabled(true);
                     settings.setAllowFileAccess(true);
+                    // Deprecated but needed for file:// URLs on older WebViews
                     settings.setAllowFileAccessFromFileURLs(true);
                     settings.setAllowUniversalAccessFromFileURLs(true);
                     settings.setUseWideViewPort(true);
@@ -560,6 +561,19 @@ public class NervClockWidget extends AppWidgetProvider {
                     settings.setBlockNetworkLoads(true);
                     settings.setBlockNetworkImage(true);
                     settings.setLoadsImagesAutomatically(true);
+                    // Enable hardware acceleration for better rendering on newer Android
+                    settings.setDatabaseEnabled(false);
+                    settings.setGeolocationEnabled(false);
+                    settings.setMediaPlaybackRequiresUserGesture(true);
+                    // Disable zoom controls
+                    settings.setSupportZoom(false);
+                    settings.setBuiltInZoomControls(false);
+                    settings.setDisplayZoomControls(false);
+                    // For Android 14+ Samsung devices
+                    settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+                    // Disable text selection
+                    webView.setLongClickable(false);
+                    webView.setHapticFeedbackEnabled(false);
                     
                     webView.setInitialScale(100);
                     

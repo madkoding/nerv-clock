@@ -1,8 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="#0d0900" />
-    <stroke
-        android:width="2dp"
-        android:color="#FF6A00" />
-</shape>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#0d0900" />
+        </shape>
+    </item>
+    <!-- Border -->
+    <item>
+        <shape android:shape="rectangle">
+            <stroke
+                android:width="2dp"
+                android:color="#FF6A00" />
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+    <!-- Top stripe bar -->
+    <item
+        android:top="0dp"
+        android:bottom="0dp"
+        android:left="0dp"
+        android:right="0dp">
+        <inset
+            android:insetTop="0dp"
+            android:insetBottom="85%">
+            <shape android:shape="rectangle">
+                <gradient
+                    android:type="linear"
+                    android:angle="45"
+                    android:startColor="#FFB800"
+                    android:endColor="#1a1a1a" />
+            </shape>
+        </inset>
+    </item>
+</layer-list>

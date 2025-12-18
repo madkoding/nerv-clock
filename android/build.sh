@@ -7,17 +7,23 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# SDK paths - Updated to support Android 14 (API 34)
+# SDK paths - Updated to support Android 15 (API 35)
 SDK_PATH="$HOME/Android/Sdk"
-BUILD_TOOLS="$SDK_PATH/build-tools/34.0.0"
-PLATFORM="$SDK_PATH/platforms/android-34"
+BUILD_TOOLS="$SDK_PATH/build-tools/35.0.0"
+PLATFORM="$SDK_PATH/platforms/android-35"
 
-# Fallback to older versions if 34 not available
+# Fallback to older versions if 35 not available
+if [ ! -d "$BUILD_TOOLS" ]; then
+    BUILD_TOOLS="$SDK_PATH/build-tools/34.0.0"
+fi
 if [ ! -d "$BUILD_TOOLS" ]; then
     BUILD_TOOLS="$SDK_PATH/build-tools/33.0.2"
 fi
 if [ ! -d "$BUILD_TOOLS" ]; then
     BUILD_TOOLS="$SDK_PATH/build-tools/30.0.3"
+fi
+if [ ! -d "$PLATFORM" ]; then
+    PLATFORM="$SDK_PATH/platforms/android-34"
 fi
 if [ ! -d "$PLATFORM" ]; then
     PLATFORM="$SDK_PATH/platforms/android-33"

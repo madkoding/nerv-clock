@@ -3,7 +3,10 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0d0900">
+    android:background="#0d0900"
+    android:padding="0dp"
+    android:clipToPadding="false"
+    android:clipChildren="false">
 
     <ImageView
         android:id="@+id/widget_image"
@@ -12,7 +15,9 @@
         android:layout_centerInParent="true"
         android:scaleType="fitCenter"
         android:adjustViewBounds="true"
-        android:contentDescription="NERV Clock" />
+        android:background="#0d0900"
+        android:src="@drawable/widget_preview"
+        android:contentDescription="@string/widget_name" />
 
     <!-- Invisible button areas overlaying the rendered buttons -->
     <!-- Bottom row buttons: STOP | SLOW | NORMAL | RACING -->

@@ -6,10 +6,13 @@
     android:minResizeHeight="40dp"
     android:targetCellWidth="4"
     android:targetCellHeight="1"
+    android:maxResizeWidth="530dp"
+    android:maxResizeHeight="200dp"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_webview"
     android:previewImage="@drawable/widget_preview"
     android:previewLayout="@layout/widget_webview"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:widgetFeatures="reconfigurable" />
+    android:description="@string/widget_description"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

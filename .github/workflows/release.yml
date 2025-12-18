@@ -114,7 +114,9 @@ jobs:
 
       - name: Install Android Build Tools
         run: |
-          sdkmanager "build-tools;34.0.0" "platforms;android-34"
+          sdkmanager "build-tools;35.0.0" "platforms;android-35"
+          # Fallback to 34 if 35 not available
+          sdkmanager "build-tools;34.0.0" "platforms;android-34" || true
 
       - name: Build Android APK
         run: |
@@ -124,8 +126,17 @@ jobs:
           
           cd "$ANDROID_DIR"
           
-          export BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
-          export PLATFORM="$ANDROID_HOME/platforms/android-34"
+          # Try SDK 35 first, fallback to 34
+          if [ -d "$ANDROID_HOME/build-tools/35.0.0" ]; then
+            export BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+            export PLATFORM="$ANDROID_HOME/platforms/android-35"
+          else
+            export BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
+            export PLATFORM="$ANDROID_HOME/platforms/android-34"
+          fi
+          
+          echo "Using BUILD_TOOLS: $BUILD_TOOLS"
+          echo "Using PLATFORM: $PLATFORM"
           
           BUILD_DIR="$ANDROID_DIR/build"
           GEN_DIR="$BUILD_DIR/gen"
@@ -172,16 +183,24 @@ jobs:
           cp "$UI_DIR/index.html" "$ASSETS_DIR/widget.html"
           sed -i 's/width=device-width/width=400/g' "$ASSETS_DIR/widget.html"
           cp "$UI_DIR/style.css" "$ASSETS_DIR/"
+          # Fix CSS units for Android WebView (cqw not supported, use vw instead)
           sed -i 's/cqw/vw/g' "$ASSETS_DIR/style.css"
           sed -i 's/cqh/vh/g' "$ASSETS_DIR/style.css"
+          # Remove container queries completely (not supported in Android WebView)
           sed -i 's/container-type: size;//g' "$ASSETS_DIR/style.css"
           sed -i 's/container-name: clock;//g' "$ASSETS_DIR/style.css"
+          # Remove @container blocks entirely (they cause parsing errors in old WebViews)
+          sed -i '/@container/,/^}/d' "$ASSETS_DIR/style.css"
+          # Update font sizes for Android widget
+          sed -i '0,/font-size: 12vw/{s/font-size: 12vw/font-size: 13vw/}' "$ASSETS_DIR/style.css"
           sed -i 's/font-size: 9vw/font-size: 13vw/g' "$ASSETS_DIR/style.css"
           sed -i 's/font-size: 6vw/font-size: 8vw/g' "$ASSETS_DIR/style.css"
           sed -i 's/font-size: 8vw/font-size: 10vw/g' "$ASSETS_DIR/style.css"
           cp "$UI_DIR/clock.js" "$ASSETS_DIR/"
           cp "$UI_DIR/fonts/dseg7.ttf" "$ASSETS_DIR/fonts/" 2>/dev/null || true
           cp "$UI_DIR/fonts/dseg7.woff" "$ASSETS_DIR/fonts/" 2>/dev/null || true
+          cp "$UI_DIR/fonts/NimbusSans-Regular.otf" "$ASSETS_DIR/fonts/" 2>/dev/null || true
+          cp "$UI_DIR/fonts/NimbusSans-Bold.otf" "$ASSETS_DIR/fonts/" 2>/dev/null || true
           
           cd "$ANDROID_DIR/app/src/main"
           zip -r "$OBJ_DIR/app.apk.tmp" assets/
