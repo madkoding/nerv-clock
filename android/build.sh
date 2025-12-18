@@ -64,7 +64,12 @@ javac -source 1.8 -target 1.8 \
     @"$BUILD_DIR/sources.txt" 2>/dev/null || true
 
 echo "📱 Creando DEX..."
-"$BUILD_TOOLS/dx" --dex --output="$OBJ_DIR/classes.dex" "$CLASSES_DIR"
+# Use d8 for SDK 34+, fallback to dx for older versions
+if [ -f "$BUILD_TOOLS/d8" ]; then
+    "$BUILD_TOOLS/d8" --output "$OBJ_DIR" $(find "$CLASSES_DIR" -name "*.class")
+else
+    "$BUILD_TOOLS/dx" --dex --output="$OBJ_DIR/classes.dex" "$CLASSES_DIR"
+fi
 
 echo "📦 Creando APK..."
 cp "$OBJ_DIR/app.apk.unaligned" "$OBJ_DIR/app.apk.tmp"

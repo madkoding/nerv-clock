@@ -114,7 +114,7 @@ jobs:
 
       - name: Install Android Build Tools
         run: |
-          sdkmanager "build-tools;30.0.3" "platforms;android-30"
+          sdkmanager "build-tools;34.0.0" "platforms;android-34"
 
       - name: Build Android APK
         run: |
@@ -124,8 +124,8 @@ jobs:
           
           cd "$ANDROID_DIR"
           
-          export BUILD_TOOLS="$ANDROID_HOME/build-tools/30.0.3"
-          export PLATFORM="$ANDROID_HOME/platforms/android-30"
+          export BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
+          export PLATFORM="$ANDROID_HOME/platforms/android-34"
           
           BUILD_DIR="$ANDROID_DIR/build"
           GEN_DIR="$BUILD_DIR/gen"
@@ -159,7 +159,7 @@ jobs:
               @"$BUILD_DIR/sources.txt"
           
           echo "📱 Creating DEX..."
-          "$BUILD_TOOLS/dx" --dex --output="$OBJ_DIR/classes.dex" "$CLASSES_DIR"
+          "$BUILD_TOOLS/d8" --output "$OBJ_DIR" "$CLASSES_DIR"/*.class "$CLASSES_DIR"/com/nerv/clock/*.class
           
           echo "📦 Creating APK..."
           cp "$OBJ_DIR/app.apk.unaligned" "$OBJ_DIR/app.apk.tmp"
