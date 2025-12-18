@@ -41,7 +41,9 @@ public class NervClockWidget extends AppWidgetProvider {
     private static final int PAGE_LOAD_TIMEOUT = 10000; // 10 seconds timeout for page load
     private static final int WEBVIEW_INIT_DELAY = 100; // Reduced delay before creating WebView
     private static final int MAX_RETRY_COUNT = 3;
+    private static final int RETRY_RESET_DELAY = 30000; // 30 seconds before retrying after max failures
     private static int retryCount = 0;
+    private static boolean showingError = false;
     private static Context appContext;
     private static long lastAppUpdateTime = 0;
     private static long lastWakeCheck = 0;
@@ -462,18 +464,24 @@ public class NervClockWidget extends AppWidgetProvider {
                     
                     webView.setWebViewClient(new WebViewClient() {
                         @Override
+                        public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                            Log.d(TAG, "Page started loading: " + url);
+                        }
+                        
+                        @Override
                         public void onPageFinished(WebView view, String url) {
                             Log.d(TAG, "Page loaded!");
                             isCreatingWebView = false;
                             pageLoaded = true;
                             isUpdating = true;
                             retryCount = 0; // Reset retry count on success
+                            showingError = false;
                             scheduleUpdate(context);
                         }
                         
                         @Override
                         public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                            Log.e(TAG, "WebView error: " + errorCode + " - " + description);
+                            Log.e(TAG, "WebView error: " + errorCode + " - " + description + " URL: " + failingUrl);
                             isCreatingWebView = false;
                             retryWithBackoff(context);
                         }
@@ -519,9 +527,21 @@ public class NervClockWidget extends AppWidgetProvider {
      */
     private static void retryWithBackoff(final Context context) {
         if (retryCount >= MAX_RETRY_COUNT) {
-            Log.e(TAG, "Max retries reached, will retry on next wake update");
+            Log.e(TAG, "Max retries reached, showing error and scheduling retry in " + RETRY_RESET_DELAY + "ms");
+            
+            // Show error bitmap
+            showErrorBitmap(context);
+            
+            // Schedule another attempt after delay
             retryCount = 0;
-            stopUpdates();
+            getHandler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    Log.d(TAG, "Retrying after max failures...");
+                    showingError = false;
+                    startWebViewUpdates(context);
+                }
+            }, RETRY_RESET_DELAY);
             return;
         }
         
@@ -537,6 +557,104 @@ public class NervClockWidget extends AppWidgetProvider {
                 startWebViewUpdates(context);
             }
         }, delay);
+    }
+    
+    /**
+     * Show an error bitmap when widget fails to load.
+     */
+    private static void showErrorBitmap(Context context) {
+        if (context == null) context = appContext;
+        if (context == null) return;
+        
+        showingError = true;
+        
+        try {
+            AppWidgetManager mgr = AppWidgetManager.getInstance(context);
+            int[] ids = mgr.getAppWidgetIds(
+                new android.content.ComponentName(context, NervClockWidget.class));
+            
+            if (ids.length == 0) return;
+            
+            Bitmap errorBmp = createErrorBitmap();
+            if (errorBmp == null) return;
+            
+            for (int id : ids) {
+                RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_webview);
+                views.setImageViewBitmap(R.id.widget_image, errorBmp);
+                mgr.updateAppWidget(id, views);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error showing error bitmap: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Create an error bitmap with Evangelion style.
+     */
+    private static Bitmap createErrorBitmap() {
+        try {
+            int width = Math.max(renderWidth, BASE_WIDTH_DP);
+            int height = Math.max(renderHeight, BASE_HEIGHT_DP);
+            
+            Bitmap bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(bmp);
+            
+            // Fill with dark background
+            canvas.drawColor(Color.parseColor("#0d0900"));
+            
+            android.graphics.Paint paint = new android.graphics.Paint();
+            paint.setAntiAlias(true);
+            
+            // Draw warning stripes bar at top (red for error)
+            int stripeHeight = height / 8;
+            int stripeWidth = stripeHeight;
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+            
+            for (int x = 0; x < width + stripeHeight; x += stripeWidth * 2) {
+                // Red stripe
+                paint.setColor(Color.parseColor("#CC0000"));
+                android.graphics.Path path = new android.graphics.Path();
+                path.moveTo(x, 0);
+                path.lineTo(x + stripeWidth, 0);
+                path.lineTo(x, stripeHeight);
+                path.lineTo(x - stripeWidth, stripeHeight);
+                path.close();
+                canvas.drawPath(path, paint);
+                
+                // Black stripe
+                paint.setColor(Color.parseColor("#1a1a1a"));
+                path = new android.graphics.Path();
+                path.moveTo(x + stripeWidth, 0);
+                path.lineTo(x + stripeWidth * 2, 0);
+                path.lineTo(x + stripeWidth, stripeHeight);
+                path.lineTo(x, stripeHeight);
+                path.close();
+                canvas.drawPath(path, paint);
+            }
+            
+            // Draw red border
+            paint.setColor(Color.parseColor("#CC0000"));
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
+            paint.setStrokeWidth(4);
+            canvas.drawRect(2, 2, width - 2, height - 2, paint);
+            
+            // Draw Japanese text "読込失敗" (Load Failed)
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#CC0000"));
+            paint.setTextSize(height / 5);
+            paint.setTextAlign(android.graphics.Paint.Align.CENTER);
+            canvas.drawText("読込失敗", width / 2, height / 2 - height / 12, paint);
+            
+            // Draw English text "LOAD FAILED - RETRYING..."
+            paint.setTextSize(height / 8);
+            paint.setColor(Color.parseColor("#FF6666"));
+            canvas.drawText("LOAD FAILED - RETRYING...", width / 2, height / 2 + height / 5, paint);
+            
+            return bmp;
+        } catch (Exception e) {
+            Log.e(TAG, "Error creating error bitmap: " + e.getMessage());
+            return null;
+        }
     }
 
     private static void scheduleUpdate(final Context context) {

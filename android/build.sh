@@ -69,9 +69,12 @@ cp ../ui/style.css "$ASSETS_DIR/"
 # With viewport width=400, vw units work correctly
 sed -i 's/cqw/vw/g' "$ASSETS_DIR/style.css"
 sed -i 's/cqh/vh/g' "$ASSETS_DIR/style.css"
-# Remove container queries (not supported in Android WebView)
+# Remove container queries completely (not supported in Android WebView)
 sed -i 's/container-type: size;//g' "$ASSETS_DIR/style.css"
 sed -i 's/container-name: clock;//g' "$ASSETS_DIR/style.css"
+# Remove @container blocks entirely (they cause parsing errors in old WebViews)
+# This removes @container ... { ... } blocks
+sed -i '/@container/,/^}/d' "$ASSETS_DIR/style.css"
 # Increase font sizes for Android widget (values are larger for better visibility)
 # Use more specific patterns to avoid replacing wrong values
 # segment-digit main: 12vw -> 13vw (line ~272)
@@ -90,6 +93,8 @@ sed -i 's/font-size: 8vw/font-size: 10vw/g' "$ASSETS_DIR/style.css"
 cp ../ui/clock.js "$ASSETS_DIR/"
 cp ../ui/fonts/dseg7.ttf "$ASSETS_DIR/fonts/" 2>/dev/null || true
 cp ../ui/fonts/dseg7.woff "$ASSETS_DIR/fonts/" 2>/dev/null || true
+cp ../ui/fonts/NimbusSans-Regular.otf "$ASSETS_DIR/fonts/" 2>/dev/null || true
+cp ../ui/fonts/NimbusSans-Bold.otf "$ASSETS_DIR/fonts/" 2>/dev/null || true
 
 if [ -d "$ASSETS_DIR" ]; then
     echo "📁 Añadiendo assets al APK..."
