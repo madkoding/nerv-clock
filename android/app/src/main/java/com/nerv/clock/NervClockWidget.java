@@ -29,6 +29,10 @@ public class NervClockWidget extends AppWidgetProvider {
     
     private static final String TAG = "NervClockWidget";
     private static final String ACTION_UPDATE = "com.nerv.clock.ACTION_UPDATE";
+    private static final String ACTION_STOP = "com.nerv.clock.ACTION_STOP";
+    private static final String ACTION_SLOW = "com.nerv.clock.ACTION_SLOW";
+    private static final String ACTION_NORMAL = "com.nerv.clock.ACTION_NORMAL";
+    private static final String ACTION_RACING = "com.nerv.clock.ACTION_RACING";
     private static final long UPDATE_INTERVAL_MS = 40; // ~25 FPS
     private static final long ALARM_INTERVAL_MS = 1000; // 1 second alarm wakeup
     
@@ -136,23 +140,49 @@ public class NervClockWidget extends AppWidgetProvider {
             return;
         }
         
-        // Handle mode changes
-        if (clockRenderer != null) {
+        // Handle mode changes - initialize renderer if needed
+        if (ACTION_STOP.equals(action) || ACTION_SLOW.equals(action) || 
+            ACTION_NORMAL.equals(action) || ACTION_RACING.equals(action)) {
+            
+            // Initialize renderer if needed
+            if (clockRenderer == null) {
+                FontManager.initialize(appContext);
+                clockRenderer = new ClockViewRenderer(appContext);
+            }
+            
             switch (action) {
-                case "com.nerv.clock.ACTION_STOP":
+                case ACTION_STOP:
                     clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.STOP);
+                    Log.d(TAG, "Mode changed to STOP");
                     break;
-                case "com.nerv.clock.ACTION_SLOW":
+                case ACTION_SLOW:
                     clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.SLOW);
+                    Log.d(TAG, "Mode changed to SLOW");
                     break;
-                case "com.nerv.clock.ACTION_NORMAL":
+                case ACTION_NORMAL:
                     clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.NORMAL);
+                    Log.d(TAG, "Mode changed to NORMAL");
                     break;
-                case "com.nerv.clock.ACTION_RACING":
+                case ACTION_RACING:
                     clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.RACING);
+                    Log.d(TAG, "Mode changed to RACING");
                     break;
             }
+            
+            // Force immediate update after mode change
+            startUpdates();
+            updateAllWidgets(context);
         }
+    }
+    
+    private PendingIntent createPendingIntent(Context context, String action, int requestCode) {
+        Intent intent = new Intent(context, NervClockWidget.class);
+        intent.setAction(action);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        return PendingIntent.getBroadcast(context, requestCode, intent, flags);
     }
     
     private void scheduleAlarm(Context context) {
@@ -282,6 +312,20 @@ public class NervClockWidget extends AppWidgetProvider {
             for (int id : ids) {
                 RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_canvas);
                 views.setImageViewBitmap(R.id.widget_image, bitmap);
+                
+                // Calculate button container height (approximately 15% of widget height)
+                // setViewLayoutHeight is only available in API 31+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    int buttonHeight = (int)(currentHeight * 0.15f);
+                    views.setViewLayoutHeight(R.id.button_container, buttonHeight, android.util.TypedValue.COMPLEX_UNIT_PX);
+                }
+                
+                // Set up click handlers for buttons
+                views.setOnClickPendingIntent(R.id.btn_stop, createPendingIntent(context, ACTION_STOP, 1));
+                views.setOnClickPendingIntent(R.id.btn_slow, createPendingIntent(context, ACTION_SLOW, 2));
+                views.setOnClickPendingIntent(R.id.btn_normal, createPendingIntent(context, ACTION_NORMAL, 3));
+                views.setOnClickPendingIntent(R.id.btn_racing, createPendingIntent(context, ACTION_RACING, 4));
+                
                 mgr.updateAppWidget(id, views);
             }
         } catch (Exception e) {

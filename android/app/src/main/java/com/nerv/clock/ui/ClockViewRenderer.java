@@ -557,12 +557,16 @@ public class ClockViewRenderer {
         
         // Draw 4 buttons
         String[] buttonModes = {"STOP", "SLOW", "NORMAL", "RACING"};
+        ClockLogic.Mode[] modes = {ClockLogic.Mode.STOP, ClockLogic.Mode.SLOW, ClockLogic.Mode.NORMAL, ClockLogic.Mode.RACING};
         int[] buttonColors = {
             ColorScheme.NERV_GREEN,
             ColorScheme.WARNING_YELLOW,
             ColorScheme.NERV_GREEN,
             ColorScheme.NERV_RED
         };
+        
+        // Get current mode to highlight active button
+        ClockLogic.Mode currentMode = clockLogic.getCurrentMode();
         
         float buttonGap = baseUnit * 0.01f;
         float availableWidth = width - sideMargin * 2 - buttonGap * 3;
@@ -574,17 +578,24 @@ public class ClockViewRenderer {
             float buttonLeft = sideMargin + (buttonWidth + buttonGap) * i;
             RectF buttonRect = new RectF(buttonLeft, buttonTop, buttonLeft + buttonWidth, buttonTop + buttonHeight);
             
-            // Draw button background
+            // Check if this button is active
+            boolean isActive = (currentMode == modes[i]);
+            
+            // Draw button background - use active color if this mode is selected
             Paint bgPaint = new Paint();
-            bgPaint.setColor(ColorScheme.BUTTON_BACKGROUND_TOP);
+            if (isActive) {
+                bgPaint.setColor(ColorScheme.ACTIVE_BUTTON_BG_TOP);
+            } else {
+                bgPaint.setColor(ColorScheme.BUTTON_BACKGROUND_TOP);
+            }
             bgPaint.setStyle(Paint.Style.FILL);
             canvas.drawRect(buttonRect, bgPaint);
             
-            // Draw button border
+            // Draw button border - highlight if active
             Paint borderPaint2 = new Paint();
-            borderPaint2.setColor(ColorScheme.BUTTON_BORDER);
+            borderPaint2.setColor(isActive ? buttonColors[i] : ColorScheme.BUTTON_BORDER);
             borderPaint2.setStyle(Paint.Style.STROKE);
-            borderPaint2.setStrokeWidth(1);
+            borderPaint2.setStrokeWidth(isActive ? 2 : 1);
             canvas.drawRect(buttonRect, borderPaint2);
             
             // Draw button text with proper centering
@@ -593,6 +604,11 @@ public class ClockViewRenderer {
             btnTextPaint.setTextSize(baseUnit * 0.02f);
             btnTextPaint.setColor(buttonColors[i]);
             btnTextPaint.setTextAlign(Paint.Align.CENTER);
+            
+            // Add glow effect for active button
+            if (isActive) {
+                btnTextPaint.setShadowLayer(baseUnit * 0.01f, 0, 0, buttonColors[i]);
+            }
             
             // Calculate proper vertical center using font metrics
             Paint.FontMetrics fm = btnTextPaint.getFontMetrics();

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- NERV Clock Widget - Canvas rendering for Android 12+ -->
 <!-- Disable system rounded corners -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -19,4 +19,43 @@
         android:clipToOutline="false"
         android:contentDescription="NERV Clock" />
 
-</FrameLayout>
+    <!-- Invisible button overlay for control bar -->
+    <LinearLayout
+        android:id="@+id/button_container"
+        android:layout_width="match_parent"
+        android:layout_height="24dp"
+        android:layout_alignParentBottom="true"
+        android:orientation="horizontal"
+        android:background="@android:color/transparent">
+
+        <View
+            android:id="@+id/btn_stop"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackground" />
+
+        <View
+            android:id="@+id/btn_slow"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackground" />
+
+        <View
+            android:id="@+id/btn_normal"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackground" />
+
+        <View
+            android:id="@+id/btn_racing"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackground" />
+
+    </LinearLayout>
+
+</RelativeLayout>
