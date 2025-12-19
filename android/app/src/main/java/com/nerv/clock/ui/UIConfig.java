@@ -9,27 +9,27 @@ public class UIConfig {
     // Responsive sizing (all relative to screen dimensions)
     
     // Margins (as % of screen)
-    public static final float MARGIN_TOP = 0.01f;          // 1% of height
-    public static final float MARGIN_BOTTOM = 0.01f;       // 1% of height
-    public static final float MARGIN_SIDES = 0.02f;        // 2% of width
+    public static final float MARGIN_TOP = 0.005f;         // 0.5% of height
+    public static final float MARGIN_BOTTOM = 0.005f;      // 0.5% of height
+    public static final float MARGIN_SIDES = 0.01f;        // 1% of width
     
     // Sections (as % of height)
-    public static final float TOP_BAR_HEIGHT = 0.15f;      // 15% of height
-    public static final float CONTROL_BAR_HEIGHT = 0.12f;  // 12% of height
+    public static final float TOP_BAR_HEIGHT = 0.08f;      // 8% of height
+    public static final float CONTROL_BAR_HEIGHT = 0.08f;  // 8% of height
     
     // Gaps (as % of width)
     public static final float GAP_BUTTONS = 0.01f;         // 1% of width between buttons
     public static final float GAP_DIGITS = 0.005f;         // 0.5% of width between digit groups
     
     // Text sizing (relative to container)
-    public static final float TEXT_SIZE_JAPANESE = 0.4f;   // 40% of top bar height
-    public static final float TEXT_SIZE_LABEL = 0.3f;      // 30% of top bar height
-    public static final float TEXT_SIZE_MODE = 0.3f;       // 30% of top bar height
-    public static final float TEXT_SIZE_BUTTON = 0.4f;     // 40% of button height
+    public static final float TEXT_SIZE_JAPANESE = 0.35f;  // 35% of top bar height
+    public static final float TEXT_SIZE_LABEL = 0.25f;     // 25% of top bar height
+    public static final float TEXT_SIZE_MODE = 0.25f;      // 25% of top bar height
+    public static final float TEXT_SIZE_BUTTON = 0.35f;    // 35% of button height
     
     // Digit sizing (relative to available space)
-    public static final float DIGIT_SIZE_RATIO = 0.8f;     // 80% of display area height
-    public static final float DIGIT_SMALL_RATIO = 0.7f;    // 70% of normal digit
+    public static final float DIGIT_SIZE_RATIO = 0.45f;    // 45% of display area height (reduced from 80%)
+    public static final float DIGIT_SMALL_RATIO = 0.65f;   // 65% of normal digit
     
     // Warning box sizing (relative to screen)
     public static final float WARNING_BOX_WIDTH = 0.12f;   // 12% of width
@@ -37,7 +37,7 @@ public class UIConfig {
     public static final float WARNING_STRIPE_WIDTH = 0.15f; // 15% of box width
     
     // Corner accents
-    public static final float CORNER_SIZE = 0.02f;         // 2% of width
+    public static final float CORNER_SIZE = 0.008f;        // 0.8% of width (reduced from 2%)
     
     // Border and stroke widths
     public static final float STROKE_BORDER = 2;           // pixels
