@@ -58,7 +58,11 @@ public class ClockLogic {
         void onModeChanged(Mode mode);
         void onWarningStateChanged(WarningState state);
         void onDepletedStateChanged(boolean isDepleted);
+        void onTimerComplete(int durationMinutes); // Called once when timer reaches zero
     }
+    
+    // Flag to track if we already fired the completion notification
+    private boolean timerCompletionFired = false;
     
     private OnClockUpdateListener listener;
     
@@ -149,6 +153,14 @@ public class ClockLogic {
                     listener.onDepletedStateChanged(true);
                 }
             }
+            // Fire timer completion notification only once
+            if (!timerCompletionFired) {
+                timerCompletionFired = true;
+                int durationMinutes = (int)(pomodoroDuration / 60000);
+                if (listener != null) {
+                    listener.onTimerComplete(durationMinutes);
+                }
+            }
             warningState = WarningState.DEPLETED;
         } else if (remainingMinutes <= 1) {
             warningState = WarningState.CRITICAL;
@@ -178,6 +190,7 @@ public class ClockLogic {
             pomodoroRemaining = pomodoroDuration;
             isDepleted = false;
             isPaused = false;
+            timerCompletionFired = false; // Reset notification flag
             lastUpdateTime = System.currentTimeMillis();
             if (listener != null) {
                 listener.onModeChanged(mode);
@@ -188,6 +201,7 @@ public class ClockLogic {
         currentMode = mode;
         isPaused = false;
         isDepleted = false;
+        timerCompletionFired = false; // Reset notification flag
         lastUpdateTime = System.currentTimeMillis();
         
         // Reset mode-specific timers

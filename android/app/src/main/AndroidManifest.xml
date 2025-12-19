@@ -15,6 +15,10 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- Required for Android 13+ to use exact alarms -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Vibration permission -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Notification permission for Android 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
     <!-- Required for widgets in Android 12+ -->
     <uses-feature android:name="android.software.app_widgets" android:required="false" />

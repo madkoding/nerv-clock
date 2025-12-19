@@ -38,6 +38,7 @@ public class NervClockWidget extends AppWidgetProvider {
     
     private static Handler handler;
     private static ClockViewRenderer clockRenderer;
+    private static NotificationHelper notificationHelper;
     private static boolean isRunning = false;
     private static Context appContext;
     private static long lastAlarmTime = 0;
@@ -67,9 +68,15 @@ public class NervClockWidget extends AppWidgetProvider {
         // Initialize fonts once
         FontManager.initialize(appContext);
         
+        // Initialize notification helper
+        if (notificationHelper == null) {
+            notificationHelper = new NotificationHelper(appContext);
+        }
+        
         // Initialize renderer
         if (clockRenderer == null) {
             clockRenderer = new ClockViewRenderer(appContext);
+            setupTimerListener();
         }
         
         // Get dimensions from first widget
@@ -81,6 +88,43 @@ public class NervClockWidget extends AppWidgetProvider {
         // Start update loop and alarm
         startUpdates();
         scheduleAlarm(context);
+    }
+    
+    /**
+     * Setup listener for timer completion notifications
+     */
+    private void setupTimerListener() {
+        if (clockRenderer != null && clockRenderer.getClockLogic() != null) {
+            clockRenderer.getClockLogic().setUpdateListener(new com.nerv.clock.ui.ClockLogic.OnClockUpdateListener() {
+                @Override
+                public void onTimeUpdate(int h, int m, int s, int cs) {
+                    // Not used in widget
+                }
+                
+                @Override
+                public void onModeChanged(com.nerv.clock.ui.ClockLogic.Mode mode) {
+                    // Not used in widget
+                }
+                
+                @Override
+                public void onWarningStateChanged(com.nerv.clock.ui.ClockLogic.WarningState state) {
+                    // Not used in widget
+                }
+                
+                @Override
+                public void onDepletedStateChanged(boolean isDepleted) {
+                    // Not used in widget
+                }
+                
+                @Override
+                public void onTimerComplete(int durationMinutes) {
+                    Log.d(TAG, "Timer complete! Duration: " + durationMinutes + " minutes");
+                    if (notificationHelper != null) {
+                        notificationHelper.showTimerCompleteNotification(durationMinutes);
+                    }
+                }
+            });
+        }
     }
     
     @Override
@@ -136,6 +180,12 @@ public class NervClockWidget extends AppWidgetProvider {
             if (clockRenderer == null) {
                 FontManager.initialize(appContext);
                 clockRenderer = new ClockViewRenderer(appContext);
+                setupTimerListener();
+            }
+            
+            // Initialize notification helper if needed
+            if (notificationHelper == null) {
+                notificationHelper = new NotificationHelper(appContext);
             }
             
             // Ensure updates are running
@@ -154,6 +204,12 @@ public class NervClockWidget extends AppWidgetProvider {
             if (clockRenderer == null) {
                 FontManager.initialize(appContext);
                 clockRenderer = new ClockViewRenderer(appContext);
+                setupTimerListener();
+            }
+            
+            // Initialize notification helper if needed
+            if (notificationHelper == null) {
+                notificationHelper = new NotificationHelper(appContext);
             }
             
             switch (action) {
@@ -305,6 +361,12 @@ public class NervClockWidget extends AppWidgetProvider {
             if (clockRenderer == null) {
                 FontManager.initialize(context);
                 clockRenderer = new ClockViewRenderer(context);
+                setupTimerListener();
+            }
+            
+            // Initialize notification helper if needed
+            if (notificationHelper == null) {
+                notificationHelper = new NotificationHelper(context);
             }
             
             // Check charging state and update renderer

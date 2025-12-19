@@ -541,29 +541,80 @@ public class ClockViewRenderer {
         float contentRight = width - sideMargin - baseUnit * 0.1f;
         RectF contentRect = new RectF(contentLeft, top + height * 0.2f, contentRight, bottom - height * 0.2f);
         
-        Paint contentPaint = new Paint();
-        contentPaint.setColor(Color.argb(25, 255, 0, 0));
-        canvas.drawRect(contentRect, contentPaint);
+        // Draw diagonal safety stripes (hazard pattern)
+        drawHazardStripes(canvas, contentRect, baseUnit);
         
-        Paint contentBorder = new Paint();
-        contentBorder.setColor(ColorScheme.CRITICAL_RED);
-        contentBorder.setStyle(Paint.Style.STROKE);
-        contentBorder.setStrokeWidth(1);
-        canvas.drawRect(contentRect, contentBorder);
+        // Fast blink effect for text (100ms cycle for rapid blinking)
+        long currentTime = System.currentTimeMillis();
+        boolean textVisible = (currentTime / 100) % 2 == 0;
         
-        // Draw JP text (relative to width)
-        float jpSize = baseUnit * 0.06f;
-        Paint jpPaint = new Paint(labelPaint);
-        jpPaint.setTextSize(jpSize);
-        jpPaint.setColor(ColorScheme.CRITICAL_RED);
-        canvas.drawText("電力枯渇", (contentLeft + contentRight) / 2, centerY - jpSize * 0.2f, jpPaint);
+        if (textVisible) {
+            // Draw JP text (relative to width)
+            float jpSize = baseUnit * 0.06f;
+            Paint jpPaint = new Paint(labelPaint);
+            jpPaint.setTextSize(jpSize);
+            jpPaint.setColor(ColorScheme.CRITICAL_RED);
+            canvas.drawText("電力枯渇", (contentLeft + contentRight) / 2, centerY - jpSize * 0.2f, jpPaint);
+            
+            // Draw EN text (relative to width)
+            float enSize = baseUnit * 0.035f;
+            Paint enPaint = new Paint(smallTextPaint);
+            enPaint.setTextSize(enSize);
+            enPaint.setColor(ColorScheme.CRITICAL_RED);
+            canvas.drawText("DEPLETED", (contentLeft + contentRight) / 2, centerY + jpSize * 0.5f, enPaint);
+        }
+    }
+    
+    /**
+     * Draw diagonal hazard/safety stripes pattern (like caution tape)
+     */
+    private void drawHazardStripes(Canvas canvas, RectF rect, float baseUnit) {
+        // Save canvas state
+        canvas.save();
         
-        // Draw EN text (relative to width)
-        float enSize = baseUnit * 0.035f;
-        Paint enPaint = new Paint(smallTextPaint);
-        enPaint.setTextSize(enSize);
-        enPaint.setColor(ColorScheme.CRITICAL_RED);
-        canvas.drawText("DEPLETED", (contentLeft + contentRight) / 2, centerY + jpSize * 0.5f, enPaint);
+        // Clip to content rectangle
+        canvas.clipRect(rect);
+        
+        // Stripe configuration
+        float stripeWidth = baseUnit * 0.025f;  // Width of each stripe
+        float stripeGap = baseUnit * 0.025f;    // Gap between stripes
+        float stripeSpacing = stripeWidth + stripeGap;
+        
+        // Paint for red stripes
+        Paint stripePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        stripePaint.setColor(Color.argb(50, 255, 0, 0));  // Very low opacity red
+        stripePaint.setStyle(Paint.Style.FILL);
+        
+        // Paint for dark background between stripes
+        Paint bgPaint = new Paint();
+        bgPaint.setColor(Color.argb(60, 0, 0, 0));  // Dark semi-transparent
+        canvas.drawRect(rect, bgPaint);
+        
+        // Calculate diagonal length needed to cover the rectangle
+        float rectWidth = rect.width();
+        float rectHeight = rect.height();
+        float diagonal = (float) Math.sqrt(rectWidth * rectWidth + rectHeight * rectHeight);
+        
+        // Draw diagonal stripes from top-left to bottom-right
+        float startX = rect.left - rectHeight;  // Start before rect to ensure coverage
+        float endX = rect.right + rectHeight;
+        
+        Path stripePath = new Path();
+        
+        for (float x = startX; x < endX; x += stripeSpacing) {
+            stripePath.reset();
+            // Draw a parallelogram for each stripe
+            stripePath.moveTo(x, rect.top);
+            stripePath.lineTo(x + stripeWidth, rect.top);
+            stripePath.lineTo(x + stripeWidth + rectHeight, rect.bottom);
+            stripePath.lineTo(x + rectHeight, rect.bottom);
+            stripePath.close();
+            
+            canvas.drawPath(stripePath, stripePaint);
+        }
+        
+        // Restore canvas state
+        canvas.restore();
     }
     
     private void drawControlBar(Canvas canvas, int width, int height, float baseUnit, float sideMargin, float controlBarHeight, float bottomMargin) {

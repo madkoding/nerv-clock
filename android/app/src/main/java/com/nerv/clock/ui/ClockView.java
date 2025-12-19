@@ -678,6 +678,11 @@ public class ClockView extends View implements ClockLogic.OnClockUpdateListener 
         invalidate();
     }
     
+    @Override
+    public void onTimerComplete(int durationMinutes) {
+        // ClockView doesn't handle notifications - widget does
+    }
+    
     public void startUpdates() {
         if (getUpdateHandler() == null) return;
         getUpdateHandler().post(updateRunnable);
