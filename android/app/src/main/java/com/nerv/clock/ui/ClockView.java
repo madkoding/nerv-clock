@@ -164,9 +164,12 @@ public class ClockView extends View implements ClockLogic.OnClockUpdateListener 
         ValueAnimator colonBlink = ValueAnimator.ofFloat(1f, 0.3f, 1f);
         colonBlink.setDuration(1000);
         colonBlink.setRepeatCount(ValueAnimator.INFINITE);
-        colonBlink.addUpdateListener(animation -> {
-            colonBlinkAlpha = (float) animation.getAnimatedValue();
-            invalidate();
+        colonBlink.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                colonBlinkAlpha = (float) animation.getAnimatedValue();
+                invalidate();
+            }
         });
         colonBlink.start();
         
@@ -174,9 +177,12 @@ public class ClockView extends View implements ClockLogic.OnClockUpdateListener 
         ValueAnimator criticalPulse = ValueAnimator.ofFloat(1f, 0.7f, 1f);
         criticalPulse.setDuration(500);
         criticalPulse.setRepeatCount(ValueAnimator.INFINITE);
-        criticalPulse.addUpdateListener(animation -> {
-            criticalPulseAlpha = (float) animation.getAnimatedValue();
-            invalidate();
+        criticalPulse.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                criticalPulseAlpha = (float) animation.getAnimatedValue();
+                invalidate();
+            }
         });
         criticalPulse.start();
     }

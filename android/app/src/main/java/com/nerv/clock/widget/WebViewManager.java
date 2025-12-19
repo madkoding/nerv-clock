@@ -72,45 +72,48 @@ public class WebViewManager {
         isCreating = true;
         creationTime = System.currentTimeMillis();
         
-        handler.post(() -> {
-            try {
-                Log.d(TAG, "Creating WebView " + width + "x" + height);
-                
-                webView = new WebView(context);
-                webView.setLayerType(View.LAYER_TYPE_NONE, null);
-                webView.setBackgroundColor(Color.parseColor(WidgetConfig.COLOR_BACKGROUND));
-                
-                configureWebSettings(webView.getSettings());
-                configureWebView(webView, width, height);
-                
-                webView.setWebViewClient(new WebViewClient() {
-                    @Override
-                    public void onPageFinished(WebView view, String url) {
-                        Log.d(TAG, "Page loaded: " + url);
-                        isCreating = false;
-                        pageLoaded = true;
-                        if (callback != null) callback.onPageLoaded();
-                    }
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Log.d(TAG, "Creating WebView " + width + "x" + height);
                     
-                    @Override
-                    public void onReceivedError(WebView view, int errorCode, 
-                            String description, String failingUrl) {
-                        Log.e(TAG, "WebView error: " + errorCode + " - " + description);
-                        isCreating = false;
-                        if (callback != null) callback.onError(description);
-                    }
-                });
-                
-                // Load the widget HTML
-                loadWidgetHtml();
-                
-                // Schedule timeout
-                scheduleLoadTimeout();
-                
-            } catch (Exception e) {
-                Log.e(TAG, "Error creating WebView: " + e.getMessage());
-                isCreating = false;
-                if (callback != null) callback.onError(e.getMessage());
+                    webView = new WebView(context);
+                    webView.setLayerType(View.LAYER_TYPE_NONE, null);
+                    webView.setBackgroundColor(Color.parseColor(WidgetConfig.COLOR_BACKGROUND));
+                    
+                    configureWebSettings(webView.getSettings());
+                    configureWebView(webView, width, height);
+                    
+                    webView.setWebViewClient(new WebViewClient() {
+                        @Override
+                        public void onPageFinished(WebView view, String url) {
+                            Log.d(TAG, "Page loaded: " + url);
+                            isCreating = false;
+                            pageLoaded = true;
+                            if (callback != null) callback.onPageLoaded();
+                        }
+                        
+                        @Override
+                        public void onReceivedError(WebView view, int errorCode, 
+                                String description, String failingUrl) {
+                            Log.e(TAG, "WebView error: " + errorCode + " - " + description);
+                            isCreating = false;
+                            if (callback != null) callback.onError(description);
+                        }
+                    });
+                    
+                    // Load the widget HTML
+                    loadWidgetHtml();
+                    
+                    // Schedule timeout
+                    scheduleLoadTimeout();
+                    
+                } catch (Exception e) {
+                    Log.e(TAG, "Error creating WebView: " + e.getMessage());
+                    isCreating = false;
+                    if (callback != null) callback.onError(e.getMessage());
+                }
             }
         });
     }
@@ -163,11 +166,14 @@ public class WebViewManager {
     }
     
     private void scheduleLoadTimeout() {
-        handler.postDelayed(() -> {
-            if (!pageLoaded && isCreating) {
-                Log.w(TAG, "Page load timeout");
-                isCreating = false;
-                if (callback != null) callback.onError("Page load timeout");
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!pageLoaded && isCreating) {
+                    Log.w(TAG, "Page load timeout");
+                    isCreating = false;
+                    if (callback != null) callback.onError("Page load timeout");
+                }
             }
         }, WidgetConfig.PAGE_LOAD_TIMEOUT_MS);
     }
@@ -212,11 +218,14 @@ public class WebViewManager {
     /**
      * Execute JavaScript in the WebView.
      */
-    public void executeJS(String script) {
+    public void executeJS(final String script) {
         if (webView != null && pageLoaded) {
-            handler.post(() -> {
-                if (webView != null) {
-                    webView.evaluateJavascript(script, null);
+            handler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (webView != null) {
+                        webView.evaluateJavascript(script, null);
+                    }
                 }
             });
         }
@@ -233,16 +242,19 @@ public class WebViewManager {
             final WebView wv = webView;
             webView = null;
             
-            handler.post(() -> {
-                try {
-                    wv.stopLoading();
-                    wv.pauseTimers();
-                    wv.onPause();
-                    wv.loadUrl("about:blank");
-                    wv.removeAllViews();
-                    wv.destroy();
-                } catch (Exception e) {
-                    Log.e(TAG, "Error destroying WebView: " + e.getMessage());
+            handler.post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        wv.stopLoading();
+                        wv.pauseTimers();
+                        wv.onPause();
+                        wv.loadUrl("about:blank");
+                        wv.removeAllViews();
+                        wv.destroy();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error destroying WebView: " + e.getMessage());
+                    }
                 }
             });
         }

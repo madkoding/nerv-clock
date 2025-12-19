@@ -338,11 +338,14 @@ public class NervClockWidget extends AppWidgetProvider {
     private void scheduleNextUpdate() {
         if (!isRunning || appContext == null) return;
         
-        getHandler().postDelayed(() -> {
-            if (!isRunning || appContext == null) return;
-            
-            updateAllWidgets(appContext);
-            scheduleNextUpdate();
+        getHandler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!isRunning || appContext == null) return;
+                
+                updateAllWidgets(appContext);
+                scheduleNextUpdate();
+            }
         }, UPDATE_INTERVAL_MS);
     }
     
