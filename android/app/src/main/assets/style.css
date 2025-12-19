@@ -315,6 +315,7 @@ html, body {
     display: flex;
     gap: 0.2vw;
     position: relative;
+    overflow: hidden;
 }
 
 /* Glow ambiental alrededor de los dígitos */
@@ -323,8 +324,8 @@ html, body {
     position: absolute;
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    width: 120%;
-    height: 140%;
+    width: 110%;
+    height: 120%;
     background: radial-gradient(ellipse at center, rgba(255, 106, 0, 0.03) 0%, transparent 70%);
     pointer-events: none;
     z-index: -1;
@@ -333,7 +334,7 @@ html, body {
 /* 7-Segment style digits - RESPONSIVE to container WIDTH */
 .segment-digit {
     font-family: 'DSEG7', 'Consolas', monospace;
-    font-size: 28vmin;
+    font-size: clamp(20px, 13.75vw, 250px);
     font-weight: normal;
     color: var(--nerv-orange);
     text-shadow: 
@@ -342,14 +343,21 @@ html, body {
         0 0 1.5vw rgba(255, 106, 0, 0.2);
     line-height: 1;
     position: relative;
-    min-width: 0.6em;
+    width: 0.7em;
+    min-width: 0.7em;
+    max-width: 0.7em;
+    flex-shrink: 0;
     text-align: center;
+    display: inline-block;
+    overflow: hidden;
 }
 
 /* Elemento ghost que muestra el dígito anterior desvaneciendose */
 .segment-digit .ghost {
     position: absolute;
-    top: 0; left: 0; right: 0;
+    top: 0; 
+    left: 50%;
+    transform: translateX(-50%);
     color: var(--nerv-orange);
     opacity: 0;
     pointer-events: none;
@@ -357,6 +365,8 @@ html, body {
     text-shadow: 
         0 0 0.5vw var(--nerv-orange),
         0 0 1.2vw var(--nerv-orange-glow);
+    width: 100%;
+    text-align: center;
 }
 
 .segment-digit .ghost.fade-out {
@@ -382,7 +392,11 @@ html, body {
 }
 
 .segment-digit.small {
-    font-size: 18vmin;
+    font-size: clamp(15px, 10vw, 188px);
+    width: 0.7em;
+    min-width: 0.7em;
+    max-width: 0.7em;
+    flex-shrink: 0;
 }
 
 .segment-digit.small::before {
@@ -391,19 +405,33 @@ html, body {
 
 .colon {
     font-family: 'DSEG7', 'Courier New', monospace;
-    font-size: 22vmin;
+    font-size: clamp(18px, 11.9vw, 225px);
     font-weight: normal;
     color: var(--nerv-orange);
     text-shadow: 0 0 0.5vw var(--nerv-orange-glow);
     line-height: 1;
     animation: blink 1s ease-in-out infinite;
-    margin: 0 0.1vw;
+    margin: 0;
+    width: 0.32em;
+    min-width: 0.32em;
+    max-width: 0.32em;
+    flex-shrink: 0;
+    text-align: center;
+    display: inline-block;
 }
 
 .small-colon {
-    font-size: 18vmin;
+    font-size: clamp(14px, 9.4vw, 175px);
     animation: none;
+    width: 0.32em;
+    min-width: 0.32em;
+    max-width: 0.32em;
+    flex-shrink: 0;
+    text-align: center;
+    display: inline-block;
 }
+
+/* Narrow layouts: clamp handles scaling automatically based on container width */
 
 @keyframes blink {
     0%, 100% { opacity: 1; }

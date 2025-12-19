@@ -3,8 +3,8 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0d0900"
-    android:padding="0dp"
+    android:background="@android:color/transparent"
+    android:padding="6dp"
     android:clipToPadding="false"
     android:clipChildren="false">
 
@@ -15,12 +15,13 @@
         android:layout_centerInParent="true"
         android:scaleType="fitXY"
         android:adjustViewBounds="false"
-        android:background="#0d0900"
+        android:background="@android:color/transparent"
         android:src="@drawable/widget_preview"
         android:contentDescription="@string/widget_name" />
 
     <!-- Invisible button areas overlaying the rendered buttons -->
     <!-- Bottom row buttons: STOP | SLOW | NORMAL | RACING -->
+    <!-- Using FrameLayout instead of View for Android 14+ RemoteViews compatibility -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -28,28 +29,28 @@
         android:orientation="horizontal"
         android:weightSum="4">
 
-        <View
+        <FrameLayout
             android:id="@+id/btn_stop"
             android:layout_width="0dp"
             android:layout_height="24dp"
             android:layout_weight="1"
             android:background="@android:color/transparent" />
 
-        <View
+        <FrameLayout
             android:id="@+id/btn_slow"
             android:layout_width="0dp"
             android:layout_height="24dp"
             android:layout_weight="1"
             android:background="@android:color/transparent" />
 
-        <View
+        <FrameLayout
             android:id="@+id/btn_normal"
             android:layout_width="0dp"
             android:layout_height="24dp"
             android:layout_weight="1"
             android:background="@android:color/transparent" />
 
-        <View
+        <FrameLayout
             android:id="@+id/btn_racing"
             android:layout_width="0dp"
             android:layout_height="24dp"

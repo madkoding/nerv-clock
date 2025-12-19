@@ -9,11 +9,25 @@ cd "$SCRIPT_DIR"
 
 # SDK paths - Updated to support Android 11-16 (API 30-36)
 # Compile with latest SDK for newest features, minSdkVersion ensures backward compatibility
-SDK_PATH="$HOME/Android/Sdk"
-BUILD_TOOLS="$SDK_PATH/build-tools/35.0.0"
-PLATFORM="$SDK_PATH/platforms/android-35"
 
-# Fallback to older versions if 35 not available
+# Try Windows SDK for build tools (for WSL)
+WINDOWS_SDK=$(ls -d /mnt/c/Users/*/AppData/Local/Android/Sdk 2>/dev/null | head -1)
+if [ -n "$WINDOWS_SDK" ] && [ -d "$WINDOWS_SDK/build-tools" ]; then
+    BUILD_TOOLS="$WINDOWS_SDK/build-tools/36.1.0"
+else
+    BUILD_TOOLS="$HOME/Android/Sdk/build-tools/35.0.0"
+fi
+
+# Use local SDK for platform (avoid permission issues with Windows paths)
+PLATFORM="$HOME/android-sdk/platforms/android-34"
+if [ ! -d "$PLATFORM" ]; then
+    PLATFORM="$HOME/Android/Sdk/platforms/android-35"
+fi
+
+# Fallback to older versions if not available
+if [ ! -d "$BUILD_TOOLS" ]; then
+    BUILD_TOOLS="$SDK_PATH/build-tools/35.0.0"
+fi
 if [ ! -d "$BUILD_TOOLS" ]; then
     BUILD_TOOLS="$SDK_PATH/build-tools/34.0.0"
 fi
@@ -47,11 +61,23 @@ CLASSES_DIR="$BUILD_DIR/classes"
 rm -rf "$BUILD_DIR"
 mkdir -p "$GEN_DIR" "$OBJ_DIR" "$BIN_DIR" "$CLASSES_DIR"
 
+# Detect if we're using Windows SDK (add .exe extension)
+AAPT2="$BUILD_TOOLS/aapt2"
+D8="$BUILD_TOOLS/d8"
+ZIPALIGN="$BUILD_TOOLS/zipalign"
+APKSIGNER="$BUILD_TOOLS/apksigner"
+if [[ "$BUILD_TOOLS" == /mnt/c/* ]]; then
+    AAPT2="$AAPT2.exe"
+    D8="$D8.bat"
+    ZIPALIGN="$ZIPALIGN.exe"
+    APKSIGNER="$APKSIGNER.bat"
+fi
+
 echo "📦 Compilando recursos..."
-"$BUILD_TOOLS/aapt2" compile --dir app/src/main/res -o "$OBJ_DIR/resources.zip"
+"$AAPT2" compile --dir app/src/main/res -o "$OBJ_DIR/resources.zip"
 
 echo "📦 Enlazando recursos..."
-"$BUILD_TOOLS/aapt2" link \
+"$AAPT2" link \
     "$OBJ_DIR/resources.zip" \
     -I "$PLATFORM/android.jar" \
     --manifest app/src/main/AndroidManifest.xml \
@@ -63,18 +89,19 @@ echo "☕ Compilando código Java..."
 find app/src/main/java -name "*.java" > "$BUILD_DIR/sources.txt"
 echo "$GEN_DIR/com/nerv/clock/R.java" >> "$BUILD_DIR/sources.txt"
 
-javac -source 1.8 -target 1.8 \
-    -bootclasspath "$PLATFORM/android.jar" \
-    -classpath "$PLATFORM/android.jar" \
+javac -source 11 -target 11 \
+    -classpath "$PLATFORM/android.jar:$GEN_DIR" \
     -g:none \
     -d "$CLASSES_DIR" \
-    @"$BUILD_DIR/sources.txt" 2>/dev/null || true
+    @"$BUILD_DIR/sources.txt"
 
 echo "📱 Creando DEX..."
-# Use d8 for SDK 34+, fallback to dx for older versions
-# --min-api 30 ensures DEX is compatible with Android 11+ while using latest bytecode
-if [ -f "$BUILD_TOOLS/d8" ]; then
-    "$BUILD_TOOLS/d8" --min-api 30 --lib "$PLATFORM/android.jar" --output "$OBJ_DIR" $(find "$CLASSES_DIR" -name "*.class")
+# Use d8 for modern SDK, --min-api 30 for Android 11+ compatibility
+if [[ "$BUILD_TOOLS" == /mnt/c/* ]]; then
+    # Use d8 via Java for Windows SDK in WSL
+    java -cp "$BUILD_TOOLS/lib/d8.jar" com.android.tools.r8.D8 --min-api 30 --lib "$PLATFORM/android.jar" --output "$OBJ_DIR" $(find "$CLASSES_DIR" -name "*.class")
+elif [ -f "$D8" ]; then
+    "$D8" --min-api 30 --lib "$PLATFORM/android.jar" --output "$OBJ_DIR" $(find "$CLASSES_DIR" -name "*.class")
 else
     "$BUILD_TOOLS/dx" --dex --output="$OBJ_DIR/classes.dex" "$CLASSES_DIR"
 fi
@@ -130,7 +157,7 @@ if [ -d "$ASSETS_DIR" ]; then
 fi
 
 echo "✍️ Alineando y firmando APK..."
-"$BUILD_TOOLS/zipalign" -f 4 "$OBJ_DIR/app.apk.tmp" "$OBJ_DIR/app.apk.aligned"
+"$ZIPALIGN" -f 4 "$OBJ_DIR/app.apk.tmp" "$OBJ_DIR/app.apk.aligned"
 
 # Create keystore if needed
 KEYSTORE="$SCRIPT_DIR/release.keystore"
@@ -147,12 +174,22 @@ if [ ! -f "$KEYSTORE" ]; then
         -dname "CN=NERV, OU=MAGI, O=NERV, L=Tokyo-3, ST=Japan, C=JP"
 fi
 
-"$BUILD_TOOLS/apksigner" sign \
-    --ks "$KEYSTORE" \
-    --ks-pass pass:android \
-    --key-pass pass:android \
-    --out "$BIN_DIR/NervClock.apk" \
-    "$OBJ_DIR/app.apk.aligned"
+if [[ "$BUILD_TOOLS" == /mnt/c/* ]]; then
+    # Use apksigner via Java for Windows SDK in WSL
+    java -jar "$BUILD_TOOLS/lib/apksigner.jar" sign \
+        --ks "$KEYSTORE" \
+        --ks-pass pass:android \
+        --key-pass pass:android \
+        --out "$BIN_DIR/NervClock.apk" \
+        "$OBJ_DIR/app.apk.aligned"
+else
+    "$APKSIGNER" sign \
+        --ks "$KEYSTORE" \
+        --ks-pass pass:android \
+        --key-pass pass:android \
+        --out "$BIN_DIR/NervClock.apk" \
+        "$OBJ_DIR/app.apk.aligned"
+fi
 
 echo ""
 echo "✅ APK generado: $BIN_DIR/NervClock.apk"
