@@ -287,42 +287,45 @@ public class ClockViewRenderer {
         tempPaint.getTextBounds("0", 0, 1, bounds);
         float digitWidth = bounds.width();
         
-        float totalWidth = digitWidth * 6 + (float) digitWidth * 0.35f * 2 + (float) digitWidth * 0.3f;
+        // Total width: 6 digits (HH:MM:SS) + 2 colons + dot + 2 small digits
+        float colonWidth = digitWidth * 0.35f;
+        float dotWidth = digitWidth * 0.15f;
+        float totalWidth = digitWidth * 6 + colonWidth * 2 + dotWidth + digitWidth * 0.5f;
         float startX = (width - totalWidth) / 2;
         
         // Draw hours
         drawDigit(canvas, hour.charAt(0) + "", startX, displayCenterY, digitPaint, "hour1");
-        drawDigit(canvas, hour.charAt(1) + "", startX + digitWidth * 1.2f, displayCenterY, digitPaint, "hour2");
+        drawDigit(canvas, hour.charAt(1) + "", startX + digitWidth * 1.1f, displayCenterY, digitPaint, "hour2");
         
         // Draw colon (with blink animation)
         updateColonBlink();
         if (colonVisible) {
-            canvas.drawText(":", startX + digitWidth * 2.5f, displayCenterY, colonPaint);
+            canvas.drawText(":", startX + digitWidth * 2.15f, displayCenterY, colonPaint);
         }
         
         // Draw minutes
-        drawDigit(canvas, minute.charAt(0) + "", startX + digitWidth * 3.2f, displayCenterY, digitPaint, "min1");
-        drawDigit(canvas, minute.charAt(1) + "", startX + digitWidth * 4.4f, displayCenterY, digitPaint, "min2");
+        drawDigit(canvas, minute.charAt(0) + "", startX + digitWidth * 2.6f, displayCenterY, digitPaint, "min1");
+        drawDigit(canvas, minute.charAt(1) + "", startX + digitWidth * 3.7f, displayCenterY, digitPaint, "min2");
         
         // Draw second colon
         if (colonVisible) {
-            canvas.drawText(":", startX + digitWidth * 5.7f, displayCenterY, colonPaint);
+            canvas.drawText(":", startX + digitWidth * 4.75f, displayCenterY, colonPaint);
         }
         
         // Draw seconds
-        drawDigit(canvas, second.charAt(0) + "", startX + digitWidth * 6.4f, displayCenterY, digitPaint, "sec1");
-        drawDigit(canvas, second.charAt(1) + "", startX + digitWidth * 7.6f, displayCenterY, digitPaint, "sec2");
+        drawDigit(canvas, second.charAt(0) + "", startX + digitWidth * 5.2f, displayCenterY, digitPaint, "sec1");
+        drawDigit(canvas, second.charAt(1) + "", startX + digitWidth * 6.3f, displayCenterY, digitPaint, "sec2");
         
         // Draw small dot
         float dotSize = colonSize * 0.4f;
         colonPaint.setTextSize(dotSize);
-        canvas.drawText(".", startX + digitWidth * 8.7f, displayCenterY + dotSize * 0.3f, colonPaint);
+        canvas.drawText(".", startX + digitWidth * 7.35f, displayCenterY + dotSize * 0.2f, colonPaint);
         
         // Draw centiseconds
         Paint smallDigitPaint = new Paint(digitPaint);
         smallDigitPaint.setTextSize(smallDigitSize);
-        drawDigit(canvas, centisecond.charAt(0) + "", startX + digitWidth * 9.2f, displayCenterY, smallDigitPaint, "ms1");
-        drawDigit(canvas, centisecond.charAt(1) + "", startX + digitWidth * 10.2f, displayCenterY, smallDigitPaint, "ms2");
+        drawDigit(canvas, centisecond.charAt(0) + "", startX + digitWidth * 7.75f, displayCenterY, smallDigitPaint, "ms1");
+        drawDigit(canvas, centisecond.charAt(1) + "", startX + digitWidth * 8.55f, displayCenterY, smallDigitPaint, "ms2");
     }
     
     private void updateColonBlink() {

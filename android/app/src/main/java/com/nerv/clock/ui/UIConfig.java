@@ -28,7 +28,7 @@ public class UIConfig {
     public static final float TEXT_SIZE_BUTTON = 0.35f;    // 35% of button height
     
     // Digit sizing (relative to available space)
-    public static final float DIGIT_SIZE_RATIO = 0.45f;    // 45% of display area height (reduced from 80%)
+    public static final float DIGIT_SIZE_RATIO = 0.33f;    // 33% of display area height (reduced 25% more)
     public static final float DIGIT_SMALL_RATIO = 0.65f;   // 65% of normal digit
     
     // Warning box sizing (relative to screen)
