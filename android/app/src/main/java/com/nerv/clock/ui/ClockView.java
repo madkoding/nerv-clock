@@ -689,22 +689,39 @@ public class ClockView extends View implements ClockLogic.OnClockUpdateListener 
         // ClockView doesn't handle notifications - widget does
     }
     
+    // Handler singleton to avoid creating new handlers
+    private android.os.Handler updateHandler;
+    private boolean isUpdating = false;
+    
     public void startUpdates() {
-        if (getUpdateHandler() == null) return;
-        getUpdateHandler().post(updateRunnable);
+        if (updateHandler == null) {
+            updateHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        }
+        // Reset last update time to prevent large delta jumps after resume
+        clockLogic.resetLastUpdateTime();
+        
+        if (!isUpdating) {
+            isUpdating = true;
+            updateHandler.post(updateRunnable);
+        }
     }
     
     public void stopUpdates() {
-        if (getUpdateHandler() != null) {
-            getUpdateHandler().removeCallbacks(updateRunnable);
+        isUpdating = false;
+        if (updateHandler != null) {
+            updateHandler.removeCallbacks(updateRunnable);
         }
     }
     
     private Runnable updateRunnable = new Runnable() {
         @Override
         public void run() {
+            if (!isUpdating) return;
             clockLogic.update();
-            postDelayed(this, 40); // Update every 40ms
+            invalidate();
+            if (updateHandler != null && isUpdating) {
+                updateHandler.postDelayed(this, 40); // Update every 40ms
+            }
         }
     };
     
@@ -767,9 +784,5 @@ public class ClockView extends View implements ClockLogic.OnClockUpdateListener 
     
     public ClockLogic getClockLogic() {
         return clockLogic;
-    }
-    
-    private android.os.Handler getUpdateHandler() {
-        return new android.os.Handler(android.os.Looper.getMainLooper());
     }
 }

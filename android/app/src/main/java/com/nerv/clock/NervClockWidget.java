@@ -183,6 +183,12 @@ public class NervClockWidget extends AppWidgetProvider {
                 setupTimerListener();
             }
             
+            // Reset last update time to prevent large delta jumps after alarm wakeup
+            // This is critical for timers (RACING/SLOW modes) to work correctly
+            if (clockRenderer.getClockLogic() != null) {
+                clockRenderer.getClockLogic().resetLastUpdateTime();
+            }
+            
             // Initialize notification helper if needed
             if (notificationHelper == null) {
                 notificationHelper = new NotificationHelper(appContext);

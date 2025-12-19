@@ -297,4 +297,13 @@ public class ClockLogic {
     public int getPomoDurationIndex() {
         return pomoDurationIndex;
     }
+    
+    /**
+     * Reset the last update time to current time.
+     * Call this when the app resumes from background to prevent
+     * large time jumps that could cause timer issues.
+     */
+    public void resetLastUpdateTime() {
+        lastUpdateTime = System.currentTimeMillis();
+    }
 }
