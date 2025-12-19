@@ -502,9 +502,34 @@ public class NervClockWidget extends AppWidgetProvider {
         try {
             if (currentWidth <= 0 || currentHeight <= 0) return null;
             
-            Bitmap bitmap = Bitmap.createBitmap(currentWidth, currentHeight, Bitmap.Config.ARGB_8888);
+            // Calculate the actual bitmap size based on content aspect ratio
+            // The clock content has a natural aspect ratio of ~3:1 (width:height)
+            // We need to create a bitmap that matches what the content will fill
+            int bitmapWidth, bitmapHeight;
+            
+            float contentAspectRatio = 3.0f; // Clock's natural aspect ratio
+            float containerAspectRatio = (float) currentWidth / currentHeight;
+            
+            if (containerAspectRatio > contentAspectRatio) {
+                // Container is wider than content - height is the constraint
+                bitmapHeight = currentHeight;
+                bitmapWidth = (int)(currentHeight * contentAspectRatio);
+            } else {
+                // Container is taller than content - width is the constraint
+                bitmapWidth = currentWidth;
+                bitmapHeight = (int)(currentWidth / contentAspectRatio);
+            }
+            
+            // Ensure minimum size
+            bitmapWidth = Math.max(bitmapWidth, 100);
+            bitmapHeight = Math.max(bitmapHeight, 50);
+            
+            Log.d(TAG, "Bitmap size: " + bitmapWidth + "x" + bitmapHeight + 
+                  " (container: " + currentWidth + "x" + currentHeight + ")");
+            
+            Bitmap bitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888);
             android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
-            clockRenderer.drawClock(canvas, currentWidth, currentHeight);
+            clockRenderer.drawClock(canvas, bitmapWidth, bitmapHeight);
             return bitmap;
         } catch (Exception e) {
             Log.e(TAG, "Render error: " + e.getMessage());
