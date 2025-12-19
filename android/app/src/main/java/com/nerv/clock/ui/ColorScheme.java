@@ -42,9 +42,9 @@ public class ColorScheme {
     public static final int STATUS_LIGHT_BRIGHT = Color.parseColor("#ff3333");
     public static final int STATUS_LIGHT_DARK = Color.parseColor("#800000");
     
-    // Background gradient
-    public static final int BG_TOP = Color.parseColor("#1a1400");
-    public static final int BG_BOTTOM = Color.parseColor("#0d0900");
+    // Background gradient (semitransparent - 85% opacity)
+    public static final int BG_TOP = Color.argb(217, 26, 20, 0);       // #1a1400 with 85% alpha
+    public static final int BG_BOTTOM = Color.argb(217, 13, 9, 0);     // #0d0900 with 85% alpha
     
     public static final int BORDER_COLOR = NERV_ORANGE;
     

@@ -20,6 +20,8 @@ public class CanvasClockRenderer {
     
     public CanvasClockRenderer(Context context) {
         this.context = context.getApplicationContext();
+        // Initialize fonts before creating renderer
+        com.nerv.clock.ui.FontManager.initialize(context);
         this.clockRenderer = new ClockViewRenderer(context);
     }
     

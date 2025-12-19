@@ -9,15 +9,15 @@ import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
-import android.graphics.Typeface;
 
 /**
  * Renders NERV Clock UI to Canvas
- * Used for both View and Widget rendering
+ * ALL SIZES are relative to WIDTH (not height) for consistent scaling
  */
 public class ClockViewRenderer {
     
     private static final String TAG = "ClockViewRenderer";
+    private static final long FADE_DURATION_MS = 200;  // Fade transition duration
     
     private Context context;
     private ClockLogic clockLogic;
@@ -30,30 +30,37 @@ public class ClockViewRenderer {
     private Paint labelPaint;
     private Paint smallTextPaint;
     private Paint borderPaint;
-    private Paint scanLinesPaint;
-    
-    // Layout dimensions
-    private float topMargin;
-    private float bottomMargin;
-    private float sideMargin;
-    private float topBarHeight;
-    private float controlBarHeight;
-    private float digitSize;
-    private float smallDigitSize;
-    private float colonSize;
     
     // Current state
     private ClockLogic.WarningState currentWarningState = ClockLogic.WarningState.NORMAL;
+    private boolean isCharging = false;
     
-    // Animation state (for widget)
+    // Animation state
     private long lastBlinkTime = 0;
     private boolean colonVisible = true;
     
+    // Fade transition state - store previous values and change timestamps
+    private String prevHour = "";
+    private String prevMinute = "";
+    private String prevSecond = "";
+    private String prevCentisecond = "";
+    private String fadingHour = "";
+    private String fadingMinute = "";
+    private String fadingSecond = "";
+    private String fadingCentisecond = "";
+    private long hourChangeTime = 0;
+    private long minuteChangeTime = 0;
+    private long secondChangeTime = 0;
+    private long centisecondChangeTime = 0;
+    
     public ClockViewRenderer(Context context) {
-        FontManager.initialize(context);
         this.context = context;
         this.clockLogic = new ClockLogic();
         initializePaints();
+    }
+    
+    public void setCharging(boolean charging) {
+        this.isCharging = charging;
     }
     
     private void initializePaints() {
@@ -86,7 +93,6 @@ public class ClockViewRenderer {
         labelPaint.setColor(ColorScheme.NERV_ORANGE);
         labelPaint.setTypeface(FontManager.getNimbusSansBold());
         labelPaint.setTextAlign(Paint.Align.CENTER);
-        labelPaint.setStyle(Paint.Style.FILL);
         
         // Small text paint
         smallTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -99,23 +105,26 @@ public class ClockViewRenderer {
         borderPaint.setColor(ColorScheme.BORDER_COLOR);
         borderPaint.setStrokeWidth(2);
         borderPaint.setStyle(Paint.Style.STROKE);
-        
-        // Scan lines paint
-        scanLinesPaint = new Paint();
-        scanLinesPaint.setColor(Color.argb(25, 0, 0, 0));
-        scanLinesPaint.setStrokeWidth(2);
     }
     
     /**
      * Draw the complete clock to canvas
+     * All sizes relative to WIDTH for consistent scaling
      */
     public void drawClock(Canvas canvas, int width, int height) {
-        // Update layout dimensions
-        updateDimensions(width, height);
-        
         // Update clock state
         clockLogic.update();
         updateWarningState();
+        
+        // BASE UNIT = width (all sizes relative to this)
+        float baseUnit = width;
+        
+        // Layout constants (relative to width)
+        float sideMargin = baseUnit * 0.02f;
+        float topBarHeight = baseUnit * 0.06f;
+        float controlBarHeight = baseUnit * 0.05f;
+        float topMargin = baseUnit * 0.01f;
+        float bottomMargin = baseUnit * 0.01f;
         
         // Draw background
         drawBackground(canvas, width, height);
@@ -123,40 +132,22 @@ public class ClockViewRenderer {
         // Draw hexagon pattern
         drawHexagonPattern(canvas, width, height);
         
-        // Draw scan lines
-        drawScanLines(canvas, width, height);
-        
         // Draw border
         canvas.drawRect(2, 2, width - 2, height - 2, borderPaint);
         
         // Draw top bar
-        drawTopBar(canvas, width, height);
+        drawTopBar(canvas, width, baseUnit, sideMargin, topMargin, topBarHeight);
         
-        // Draw clock display
-        drawClockDisplay(canvas, width, height);
+        // Draw clock display (main area)
+        float clockTop = topMargin + topBarHeight + baseUnit * 0.02f;
+        float clockBottom = height - controlBarHeight - bottomMargin - baseUnit * 0.02f;
+        drawClockDisplay(canvas, width, height, baseUnit, sideMargin, clockTop, clockBottom);
         
         // Draw control bar
-        drawControlBar(canvas, width, height);
+        drawControlBar(canvas, width, height, baseUnit, sideMargin, controlBarHeight, bottomMargin);
         
         // Draw corners
-        drawCorners(canvas, width, height);
-    }
-    
-    private void updateDimensions(int width, int height) {
-        topMargin = height * UIConfig.MARGIN_TOP;
-        bottomMargin = height * UIConfig.MARGIN_BOTTOM;
-        sideMargin = width * UIConfig.MARGIN_SIDES;
-        topBarHeight = height * UIConfig.TOP_BAR_HEIGHT;
-        controlBarHeight = height * UIConfig.CONTROL_BAR_HEIGHT;
-        
-        float availableHeight = height - topBarHeight - controlBarHeight - (topMargin + bottomMargin) * 2;
-        digitSize = availableHeight * UIConfig.DIGIT_SIZE_RATIO;
-        smallDigitSize = digitSize * UIConfig.DIGIT_SMALL_RATIO;
-        colonSize = digitSize * 0.9f;
-        
-        digitPaint.setTextSize(digitSize);
-        colonPaint.setTextSize(colonSize);
-        segmentOffPaint.setTextSize(digitSize);
+        drawCorners(canvas, width, height, baseUnit, sideMargin);
     }
     
     private void updateWarningState() {
@@ -177,7 +168,6 @@ public class ClockViewRenderer {
     }
     
     private void drawBackground(Canvas canvas, int width, int height) {
-        // Gradient background
         LinearGradient gradient = new LinearGradient(0, 0, 0, height,
             ColorScheme.BG_TOP, ColorScheme.BG_BOTTOM, Shader.TileMode.CLAMP);
         Paint bgPaint = new Paint();
@@ -186,85 +176,207 @@ public class ClockViewRenderer {
     }
     
     private void drawHexagonPattern(Canvas canvas, int width, int height) {
-        Paint hexPaint = new Paint();
-        hexPaint.setColor(Color.argb(38, 136, 0, 0));
-        hexPaint.setStyle(Paint.Style.STROKE);
-        hexPaint.setStrokeWidth(1);
+        // Hexagon pattern relative to widget size - LARGER hexagons
+        float baseSpacing = width * 0.08f;  // Bigger spacing
+        float hexSize = baseSpacing * 0.5f;
         
-        float spacing = 28;
-        for (float x = 0; x < width; x += spacing) {
-            for (float y = 0; y < height; y += spacing * 0.866f) {
-                drawHexagon(canvas, x, y, 14, hexPaint);
+        Paint hexPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        hexPaint.setColor(Color.argb(50, 180, 0, 0));  // Red with ~20% opacity
+        hexPaint.setStyle(Paint.Style.STROKE);
+        hexPaint.setStrokeWidth(2f);
+        
+        // Offset for honeycomb pattern
+        float rowHeight = baseSpacing * 0.866f;
+        int row = 0;
+        
+        for (float y = -hexSize; y < height + hexSize; y += rowHeight) {
+            float xOffset = (row % 2 == 0) ? 0 : baseSpacing * 0.5f;
+            for (float x = -hexSize + xOffset; x < width + hexSize; x += baseSpacing) {
+                drawHexagon(canvas, x, y, hexSize, hexPaint);
             }
+            row++;
         }
     }
     
-    private void drawHexagon(Canvas canvas, float cx, float cy, float radius, Paint paint) {
+    private void drawHexagon(Canvas canvas, float cx, float cy, float size, Paint paint) {
         Path path = new Path();
         for (int i = 0; i < 6; i++) {
-            float angle = (float) (i * Math.PI / 3);
-            float x = cx + radius * (float) Math.cos(angle);
-            float y = cy + radius * (float) Math.sin(angle);
-            if (i == 0) {
-                path.moveTo(x, y);
-            } else {
-                path.lineTo(x, y);
-            }
+            float angle = (float) (Math.PI / 3 * i - Math.PI / 6);
+            float x = cx + size * (float) Math.cos(angle);
+            float y = cy + size * (float) Math.sin(angle);
+            if (i == 0) path.moveTo(x, y);
+            else path.lineTo(x, y);
         }
         path.close();
         canvas.drawPath(path, paint);
     }
     
-    private void drawScanLines(Canvas canvas, int width, int height) {
-        for (int y = 0; y < height; y += 4) {
-            canvas.drawLine(0, y, width, y, scanLinesPaint);
-        }
-    }
-    
-    private void drawTopBar(Canvas canvas, int width, int height) {
+    private void drawTopBar(Canvas canvas, int width, float baseUnit, float sideMargin, float topMargin, float topBarHeight) {
         float topBarBottom = topMargin + topBarHeight;
         
-        // Draw border line
+        // Draw separator line
         Paint linePaint = new Paint();
         linePaint.setColor(Color.argb(39, 255, 106, 0));
         linePaint.setStrokeWidth(1);
         canvas.drawLine(sideMargin, topBarBottom, width - sideMargin, topBarBottom, linePaint);
         
-        // Draw Japanese text
-        float jpTextSize = topBarHeight * 0.4f;
-        textPaint.setTextSize(jpTextSize);
-        canvas.drawText("作戦終了まで", sideMargin + width * 0.1f, topMargin + jpTextSize * 1.5f, textPaint);
+        // Text sizes relative to WIDTH
+        float jpTextSize = baseUnit * 0.035f;
+        float labelSize = baseUnit * 0.028f;
         
-        // Draw label
-        float labelSize = topBarHeight * 0.3f;
-        labelPaint.setTextSize(labelSize);
-        canvas.drawText("NERV CHRONOMETER SYSTEM", width / 2, topMargin + labelSize * 1.5f, labelPaint);
+        // Calculate vertical center of top bar
+        float topBarCenterY = topMargin + topBarHeight / 2;
         
-        // Draw mode
+        // Draw Japanese text (left aligned, vertically centered)
+        Paint jpPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        jpPaint.setTypeface(FontManager.getNimbusSansRegular());
+        jpPaint.setTextSize(jpTextSize);
+        jpPaint.setColor(ColorScheme.NERV_ORANGE);
+        jpPaint.setTextAlign(Paint.Align.LEFT);
+        Paint.FontMetrics jpFm = jpPaint.getFontMetrics();
+        float jpTextY = topBarCenterY + (jpFm.descent - jpFm.ascent) / 2 - jpFm.descent;
+        canvas.drawText("作戦終了まで", sideMargin + baseUnit * 0.02f, jpTextY, jpPaint);
+        
+        // Draw label "NERV CHRONOMETER" (centered)
+        Paint chronoPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        chronoPaint.setTypeface(FontManager.getNimbusSansBold());
+        chronoPaint.setTextSize(labelSize);
+        chronoPaint.setColor(ColorScheme.NERV_ORANGE);
+        chronoPaint.setTextAlign(Paint.Align.CENTER);
+        Paint.FontMetrics chronoFm = chronoPaint.getFontMetrics();
+        float chronoTextY = topBarCenterY + (chronoFm.descent - chronoFm.ascent) / 2 - chronoFm.descent;
+        canvas.drawText("NERV CHRONOMETER", width / 2, chronoTextY, chronoPaint);
+        
+        // Draw mode (right aligned, vertically centered)
         String modeText = clockLogic.getCurrentMode().name();
         if (clockLogic.getCurrentMode() == ClockLogic.Mode.SLOW) {
             long mins = clockLogic.getPomodoroDuration() / 60000;
             modeText = "SLOW " + mins + "m";
         }
         
-        Paint modePaint = new Paint(textPaint);
+        Paint modePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        modePaint.setTypeface(FontManager.getNimbusSansBold());
+        modePaint.setTextSize(labelSize);
+        modePaint.setTextAlign(Paint.Align.RIGHT);
         modePaint.setColor(ClockLogic.Mode.NORMAL == clockLogic.getCurrentMode() ? 
             ColorScheme.NERV_GREEN : ColorScheme.getModeColor(clockLogic.getCurrentMode().name().toLowerCase()));
-        modePaint.setTextSize(labelSize);
-        canvas.drawText(modeText, width - sideMargin - width * 0.1f, topMargin + labelSize * 1.5f, modePaint);
+        Paint.FontMetrics modeFm = modePaint.getFontMetrics();
+        float modeTextY = topBarCenterY + (modeFm.descent - modeFm.ascent) / 2 - modeFm.descent;
+        canvas.drawText(modeText, width - sideMargin - baseUnit * 0.12f, modeTextY, modePaint);
+        
+        // Draw warning box
+        drawWarningBox(canvas, width, baseUnit, sideMargin, topMargin, topBarHeight);
     }
     
-    private void drawClockDisplay(Canvas canvas, int width, int height) {
-        float displayTop = topMargin + topBarHeight;
-        float displayBottom = height - controlBarHeight - bottomMargin;
-        float displayCenterY = displayTop + (displayBottom - displayTop) / 2;
+    private void drawWarningBox(Canvas canvas, int width, float baseUnit, float sideMargin, float topMargin, float topBarHeight) {
+        float boxHeight = topBarHeight * 0.85f;
+        float boxWidth = baseUnit * 0.1f;
+        float boxRight = width - sideMargin - baseUnit * 0.01f;
+        float boxLeft = boxRight - boxWidth;
+        float boxTop = topMargin + (topBarHeight - boxHeight) / 2;
+        float boxBottom = boxTop + boxHeight;
         
+        // Color depends on charging state
+        int stripeColor = isCharging ? ColorScheme.NERV_GREEN : ColorScheme.NERV_RED;
+        int textColor = isCharging ? ColorScheme.NERV_GREEN : ColorScheme.NERV_ORANGE;
+        String kanjiText = isCharging ? "外部" : "内部";
+        String labelText = isCharging ? "EXTERNAL" : "INTERNAL";
+        
+        // Draw striped part (left edge)
+        float stripeWidth = boxWidth * 0.15f;
+        Paint stripePaint = new Paint();
+        stripePaint.setColor(stripeColor);
+        stripePaint.setStyle(Paint.Style.FILL);
+        
+        for (float x = boxLeft; x < boxLeft + stripeWidth; x += 3) {
+            canvas.drawRect(x, boxTop, x + 2, boxBottom, stripePaint);
+        }
+        
+        // Draw content box background
+        Paint contentPaint = new Paint();
+        contentPaint.setColor(ColorScheme.NERV_DARK);
+        contentPaint.setStyle(Paint.Style.FILL);
+        RectF contentRect = new RectF(boxLeft + stripeWidth, boxTop, boxRight, boxBottom);
+        canvas.drawRect(contentRect, contentPaint);
+        
+        // Draw border
+        Paint borderPaint2 = new Paint();
+        borderPaint2.setColor(textColor);
+        borderPaint2.setStyle(Paint.Style.STROKE);
+        borderPaint2.setStrokeWidth(1);
+        canvas.drawRect(contentRect, borderPaint2);
+        
+        // Draw kanji and label vertically centered in box
+        float contentCenterX = boxLeft + stripeWidth + (boxWidth - stripeWidth) / 2;
+        float kanjiSize = baseUnit * 0.022f;      // Slightly larger
+        float internalSize = baseUnit * 0.014f;   // Larger for better visibility
+        
+        // Use font metrics for accurate vertical centering
+        Paint kanjiPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        kanjiPaint.setTypeface(FontManager.getNimbusSansBold());
+        kanjiPaint.setTextSize(kanjiSize);
+        kanjiPaint.setColor(textColor);
+        kanjiPaint.setTextAlign(Paint.Align.CENTER);
+        
+        Paint internalPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        internalPaint.setTypeface(FontManager.getNimbusSansRegular());
+        internalPaint.setTextSize(internalSize);
+        internalPaint.setColor(textColor);
+        internalPaint.setTextAlign(Paint.Align.CENTER);
+        
+        // Calculate total height of both texts with gap
+        Paint.FontMetrics kanjiFm = kanjiPaint.getFontMetrics();
+        Paint.FontMetrics internalFm = internalPaint.getFontMetrics();
+        float kanjiHeight = kanjiFm.descent - kanjiFm.ascent;
+        float internalHeight = internalFm.descent - internalFm.ascent;
+        float gap = baseUnit * 0.002f;  // Small gap between texts
+        float totalHeight = kanjiHeight + gap + internalHeight;
+        
+        // Center both texts vertically in the box (with slight offset down)
+        float boxCenterY = boxTop + boxHeight / 2;
+        float textOffset = baseUnit * 0.005f;  // Offset down a few pixels
+        float startY = boxCenterY - totalHeight / 2 + textOffset;
+        
+        // Draw kanji
+        float kanjiY = startY + kanjiHeight - kanjiFm.descent;
+        canvas.drawText(kanjiText, contentCenterX, kanjiY, kanjiPaint);
+        
+        // Draw label text
+        float internalY = startY + kanjiHeight + gap + internalHeight - internalFm.descent;
+        canvas.drawText(labelText, contentCenterX, internalY, internalPaint);
+    }
+    
+    private void drawClockDisplay(Canvas canvas, int width, int height, float baseUnit, float sideMargin, float clockTop, float clockBottom) {
         String hour = clockLogic.getHourString();
         String minute = clockLogic.getMinuteString();
         String second = clockLogic.getSecondString();
         String centisecond = clockLogic.getCentisecondString();
         
-        // Set digit color
+        long currentTime = System.currentTimeMillis();
+        
+        // Track changes and store previous values for fade out
+        if (!hour.equals(prevHour)) {
+            fadingHour = prevHour;
+            hourChangeTime = currentTime;
+            prevHour = hour;
+        }
+        if (!minute.equals(prevMinute)) {
+            fadingMinute = prevMinute;
+            minuteChangeTime = currentTime;
+            prevMinute = minute;
+        }
+        if (!second.equals(prevSecond)) {
+            fadingSecond = prevSecond;
+            secondChangeTime = currentTime;
+            prevSecond = second;
+        }
+        if (!centisecond.equals(prevCentisecond)) {
+            fadingCentisecond = prevCentisecond;
+            centisecondChangeTime = currentTime;
+            prevCentisecond = centisecond;
+        }
+        
+        // Set digit color based on warning state
         int digitColor = ColorScheme.NERV_ORANGE;
         switch (currentWarningState) {
             case WARNING:
@@ -274,58 +386,105 @@ public class ClockViewRenderer {
                 digitColor = ColorScheme.CRITICAL_RED;
                 break;
             case DEPLETED:
-                drawDepletedMessage(canvas, displayTop, displayBottom, width);
+                drawDepletedMessage(canvas, width, clockTop, clockBottom, baseUnit, sideMargin);
                 return;
         }
         
-        digitPaint.setColor(digitColor);
-        colonPaint.setColor(digitColor);
+        // SIZES RELATIVE TO WIDTH (not height!)
+        float digitSize = baseUnit * 0.132f;      // Main digits (10% larger)
+        float smallDigitSize = digitSize * 0.5f;  // Centiseconds
         
-        // Calculate spacing
-        Paint tempPaint = new Paint(digitPaint);
-        Rect bounds = new Rect();
-        tempPaint.getTextBounds("0", 0, 1, bounds);
-        float digitWidth = bounds.width();
-        
-        // Total width: 6 digits (HH:MM:SS) + 2 colons + dot + 2 small digits
-        float colonWidth = digitWidth * 0.35f;
-        float dotWidth = digitWidth * 0.15f;
-        float totalWidth = digitWidth * 6 + colonWidth * 2 + dotWidth + digitWidth * 0.5f;
-        float startX = (width - totalWidth) / 2;
-        
-        // Draw hours
-        drawDigit(canvas, hour.charAt(0) + "", startX, displayCenterY, digitPaint, "hour1");
-        drawDigit(canvas, hour.charAt(1) + "", startX + digitWidth * 1.1f, displayCenterY, digitPaint, "hour2");
-        
-        // Draw colon (with blink animation)
+        // Update blink state
         updateColonBlink();
-        if (colonVisible) {
-            canvas.drawText(":", startX + digitWidth * 2.15f, displayCenterY, colonPaint);
+        
+        // Build time strings
+        String mainTime = hour + ":" + minute + ":" + second;
+        String mainTimeBg = "88:88:88";  // Background for 7-segment effect
+        
+        // Create paint for main time
+        Paint mainPaint = new Paint(digitPaint);
+        mainPaint.setTextSize(digitSize);
+        mainPaint.setTextAlign(Paint.Align.CENTER);
+        
+        // Create paint for centiseconds
+        Paint smallPaint = new Paint(digitPaint);
+        smallPaint.setTextSize(smallDigitSize);
+        smallPaint.setTextAlign(Paint.Align.LEFT);
+        
+        // Calculate dimensions
+        Rect bounds = new Rect();
+        mainPaint.getTextBounds(mainTime, 0, mainTime.length(), bounds);
+        float mainWidth = mainPaint.measureText(mainTime);
+        float mainHeight = bounds.height();
+        
+        smallPaint.getTextBounds(centisecond, 0, centisecond.length(), bounds);
+        float smallWidth = smallPaint.measureText("." + centisecond);
+        
+        // Total width and center position
+        float centerX = width / 2f;
+        float mainX = centerX - smallWidth / 2;  // Shift left to account for centiseconds
+        float centerY = clockTop + (clockBottom - clockTop) / 2 + mainHeight / 3;
+        
+        // Draw background "88:88:88" for 7-segment effect (dimmed)
+        mainPaint.setColor(Color.argb(25, 255, 106, 0));  // Very dim orange
+        canvas.drawText(mainTimeBg, mainX, centerY, mainPaint);
+        
+        // Calculate fade out alpha for previous second (fading out)
+        float secondElapsed = currentTime - secondChangeTime;
+        if (secondElapsed < FADE_DURATION_MS && fadingSecond.length() > 0) {
+            float fadeOutAlpha = 1f - (secondElapsed / (float) FADE_DURATION_MS);
+            String fadingTime = colonVisible ? 
+                hour + ":" + minute + ":" + fadingSecond : 
+                hour + " " + minute + " " + fadingSecond;
+            mainPaint.setColor(Color.argb((int)(255 * fadeOutAlpha), 
+                Color.red(digitColor), Color.green(digitColor), Color.blue(digitColor)));
+            canvas.drawText(fadingTime, mainX, centerY, mainPaint);
         }
         
-        // Draw minutes
-        drawDigit(canvas, minute.charAt(0) + "", startX + digitWidth * 2.6f, displayCenterY, digitPaint, "min1");
-        drawDigit(canvas, minute.charAt(1) + "", startX + digitWidth * 3.7f, displayCenterY, digitPaint, "min2");
+        // Draw current time (always full opacity) with glow effect
+        String displayTime = colonVisible ? mainTime : hour + " " + minute + " " + second;
+        mainPaint.setColor(digitColor);
+        // Add subtle outer glow
+        mainPaint.setShadowLayer(digitSize * 0.08f, 0, 0, digitColor);
+        canvas.drawText(displayTime, mainX, centerY, mainPaint);
+        mainPaint.setShadowLayer(0, 0, 0, 0);  // Clear shadow for next draws
         
-        // Draw second colon
+        // Draw centiseconds with dot - SEPARATE dot and digits to avoid shifting
+        float dotWidth = smallPaint.measureText(".");
+        float smallX = mainX + mainWidth / 2 + dotWidth * 0.2f;
+        float smallY = centerY;  // Align baseline with main digits
+        
+        // Background for dot
+        smallPaint.setColor(Color.argb(25, 255, 106, 0));
+        canvas.drawText(".", smallX, smallY, smallPaint);
+        
+        // Draw actual dot (only if visible)
         if (colonVisible) {
-            canvas.drawText(":", startX + digitWidth * 4.75f, displayCenterY, colonPaint);
+            smallPaint.setColor(digitColor);
+            canvas.drawText(".", smallX, smallY, smallPaint);
         }
         
-        // Draw seconds
-        drawDigit(canvas, second.charAt(0) + "", startX + digitWidth * 5.2f, displayCenterY, digitPaint, "sec1");
-        drawDigit(canvas, second.charAt(1) + "", startX + digitWidth * 6.3f, displayCenterY, digitPaint, "sec2");
+        // Position for centiseconds (after dot, fixed position)
+        float centiX = smallX + dotWidth;
         
-        // Draw small dot
-        float dotSize = colonSize * 0.4f;
-        colonPaint.setTextSize(dotSize);
-        canvas.drawText(".", startX + digitWidth * 7.35f, displayCenterY + dotSize * 0.2f, colonPaint);
+        // Background for centiseconds
+        smallPaint.setColor(Color.argb(25, 255, 106, 0));
+        canvas.drawText("88", centiX, smallY, smallPaint);
         
-        // Draw centiseconds
-        Paint smallDigitPaint = new Paint(digitPaint);
-        smallDigitPaint.setTextSize(smallDigitSize);
-        drawDigit(canvas, centisecond.charAt(0) + "", startX + digitWidth * 7.75f, displayCenterY, smallDigitPaint, "ms1");
-        drawDigit(canvas, centisecond.charAt(1) + "", startX + digitWidth * 8.55f, displayCenterY, smallDigitPaint, "ms2");
+        // Draw fading out previous centiseconds
+        float centiElapsed = currentTime - centisecondChangeTime;
+        if (centiElapsed < FADE_DURATION_MS && fadingCentisecond.length() > 0) {
+            float fadeOutAlpha = 1f - (centiElapsed / (float) FADE_DURATION_MS);
+            smallPaint.setColor(Color.argb((int)(255 * fadeOutAlpha), 
+                Color.red(digitColor), Color.green(digitColor), Color.blue(digitColor)));
+            canvas.drawText(fadingCentisecond, centiX, smallY, smallPaint);
+        }
+        
+        // Actual centiseconds (always full opacity) with glow effect
+        smallPaint.setColor(digitColor);
+        smallPaint.setShadowLayer(smallDigitSize * 0.08f, 0, 0, digitColor);
+        canvas.drawText(centisecond, centiX, smallY, smallPaint);
+        smallPaint.setShadowLayer(0, 0, 0, 0);  // Clear shadow
     }
     
     private void updateColonBlink() {
@@ -336,7 +495,7 @@ public class ClockViewRenderer {
         }
     }
     
-    private void drawDigit(Canvas canvas, String digit, float x, float y, Paint paint, String id) {
+    private void drawDigit(Canvas canvas, String digit, float x, float y, Paint paint) {
         // Draw background "8"
         segmentOffPaint.setTextSize(paint.getTextSize());
         canvas.drawText("8", x, y, segmentOffPaint);
@@ -345,13 +504,21 @@ public class ClockViewRenderer {
         canvas.drawText(digit, x, y, paint);
     }
     
-    private void drawDepletedMessage(Canvas canvas, float top, float bottom, int width) {
+    private void drawSmallDigit(Canvas canvas, String digit, float x, float y, Paint paint, float size) {
+        // Draw background "8"
+        segmentOffPaint.setTextSize(size);
+        canvas.drawText("8", x, y, segmentOffPaint);
+        
+        // Draw actual digit
+        canvas.drawText(digit, x, y, paint);
+    }
+    
+    private void drawDepletedMessage(Canvas canvas, int width, float top, float bottom, float baseUnit, float sideMargin) {
         float height = bottom - top;
         float centerY = top + height / 2;
         
-        // Draw content
-        float contentLeft = sideMargin + width * 0.1f;
-        float contentRight = width - sideMargin - width * 0.1f;
+        float contentLeft = sideMargin + baseUnit * 0.1f;
+        float contentRight = width - sideMargin - baseUnit * 0.1f;
         RectF contentRect = new RectF(contentLeft, top + height * 0.2f, contentRight, bottom - height * 0.2f);
         
         Paint contentPaint = new Paint();
@@ -364,22 +531,22 @@ public class ClockViewRenderer {
         contentBorder.setStrokeWidth(1);
         canvas.drawRect(contentRect, contentBorder);
         
-        // Draw JP text
-        float jpSize = height * 0.35f;
+        // Draw JP text (relative to width)
+        float jpSize = baseUnit * 0.06f;
         Paint jpPaint = new Paint(labelPaint);
         jpPaint.setTextSize(jpSize);
         jpPaint.setColor(ColorScheme.CRITICAL_RED);
-        canvas.drawText("電力枯渇", (contentLeft + contentRight) / 2, centerY - jpSize * 0.3f, jpPaint);
+        canvas.drawText("電力枯渇", (contentLeft + contentRight) / 2, centerY - jpSize * 0.2f, jpPaint);
         
-        // Draw EN text
-        float enSize = height * 0.2f;
+        // Draw EN text (relative to width)
+        float enSize = baseUnit * 0.035f;
         Paint enPaint = new Paint(smallTextPaint);
         enPaint.setTextSize(enSize);
         enPaint.setColor(ColorScheme.CRITICAL_RED);
-        canvas.drawText("DEPLETED", (contentLeft + contentRight) / 2, centerY + jpSize * 0.4f, enPaint);
+        canvas.drawText("DEPLETED", (contentLeft + contentRight) / 2, centerY + jpSize * 0.5f, enPaint);
     }
     
-    private void drawControlBar(Canvas canvas, int width, int height) {
+    private void drawControlBar(Canvas canvas, int width, int height, float baseUnit, float sideMargin, float controlBarHeight, float bottomMargin) {
         float controlBarTop = height - controlBarHeight - bottomMargin;
         
         // Draw separator
@@ -388,13 +555,60 @@ public class ClockViewRenderer {
         linePaint.setStrokeWidth(1);
         canvas.drawLine(sideMargin, controlBarTop, width - sideMargin, controlBarTop, linePaint);
         
+        // Draw 4 buttons
+        String[] buttonModes = {"STOP", "SLOW", "NORMAL", "RACING"};
+        int[] buttonColors = {
+            ColorScheme.NERV_GREEN,
+            ColorScheme.WARNING_YELLOW,
+            ColorScheme.NERV_GREEN,
+            ColorScheme.NERV_RED
+        };
+        
+        float buttonGap = baseUnit * 0.01f;
+        float availableWidth = width - sideMargin * 2 - buttonGap * 3;
+        float buttonWidth = availableWidth / 4;
+        float buttonHeight = controlBarHeight * 0.85f;
+        float buttonTop = controlBarTop + (controlBarHeight - buttonHeight) / 2;
+        
+        for (int i = 0; i < 4; i++) {
+            float buttonLeft = sideMargin + (buttonWidth + buttonGap) * i;
+            RectF buttonRect = new RectF(buttonLeft, buttonTop, buttonLeft + buttonWidth, buttonTop + buttonHeight);
+            
+            // Draw button background
+            Paint bgPaint = new Paint();
+            bgPaint.setColor(ColorScheme.BUTTON_BACKGROUND_TOP);
+            bgPaint.setStyle(Paint.Style.FILL);
+            canvas.drawRect(buttonRect, bgPaint);
+            
+            // Draw button border
+            Paint borderPaint2 = new Paint();
+            borderPaint2.setColor(ColorScheme.BUTTON_BORDER);
+            borderPaint2.setStyle(Paint.Style.STROKE);
+            borderPaint2.setStrokeWidth(1);
+            canvas.drawRect(buttonRect, borderPaint2);
+            
+            // Draw button text with proper centering
+            Paint btnTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            btnTextPaint.setTypeface(FontManager.getNimbusSansBold());
+            btnTextPaint.setTextSize(baseUnit * 0.02f);
+            btnTextPaint.setColor(buttonColors[i]);
+            btnTextPaint.setTextAlign(Paint.Align.CENTER);
+            
+            // Calculate proper vertical center using font metrics
+            Paint.FontMetrics fm = btnTextPaint.getFontMetrics();
+            float textHeight = fm.descent - fm.ascent;
+            float textY = buttonRect.centerY() + textHeight / 2 - fm.descent;
+            
+            canvas.drawText(buttonModes[i], buttonRect.centerX(), textY, btnTextPaint);
+        }
+        
         // Draw status light
-        drawStatusLight(canvas, width, height);
+        drawStatusLight(canvas, width, height, baseUnit, sideMargin, controlBarHeight, bottomMargin);
     }
     
-    private void drawStatusLight(Canvas canvas, int width, int height) {
-        float lightSize = (controlBarHeight * 0.6f);
-        float lightRight = width - sideMargin - width * 0.01f;
+    private void drawStatusLight(Canvas canvas, int width, int height, float baseUnit, float sideMargin, float controlBarHeight, float bottomMargin) {
+        float lightSize = baseUnit * 0.025f;
+        float lightRight = width - sideMargin - baseUnit * 0.01f;
         float lightX = lightRight - lightSize / 2;
         float lightTop = height - controlBarHeight - bottomMargin + (controlBarHeight - lightSize) / 2;
         
@@ -407,12 +621,13 @@ public class ClockViewRenderer {
         Paint lightBorder = new Paint();
         lightBorder.setColor(ColorScheme.STATUS_LIGHT_DARK);
         lightBorder.setStyle(Paint.Style.STROKE);
-        lightBorder.setStrokeWidth(2);
+        lightBorder.setStrokeWidth(1);
         canvas.drawRect(lightRect, lightBorder);
     }
     
-    private void drawCorners(Canvas canvas, int width, int height) {
-        float cornerSize = width * UIConfig.CORNER_SIZE;
+    private void drawCorners(Canvas canvas, int width, int height, float baseUnit, float sideMargin) {
+        float cornerSize = baseUnit * 0.02f;  // Half the original size (was 0.04f)
+        float cornerMargin = sideMargin * 0.3f;  // Corners closer to edge
         Paint cornerPaint = new Paint();
         cornerPaint.setColor(ColorScheme.NERV_ORANGE);
         cornerPaint.setStyle(Paint.Style.STROKE);
@@ -420,30 +635,30 @@ public class ClockViewRenderer {
         
         // Top-left
         Path tlPath = new Path();
-        tlPath.moveTo(sideMargin, sideMargin + cornerSize);
-        tlPath.lineTo(sideMargin, sideMargin);
-        tlPath.lineTo(sideMargin + cornerSize, sideMargin);
+        tlPath.moveTo(cornerMargin, cornerMargin + cornerSize);
+        tlPath.lineTo(cornerMargin, cornerMargin);
+        tlPath.lineTo(cornerMargin + cornerSize, cornerMargin);
         canvas.drawPath(tlPath, cornerPaint);
         
         // Top-right
         Path trPath = new Path();
-        trPath.moveTo(width - sideMargin - cornerSize, sideMargin);
-        trPath.lineTo(width - sideMargin, sideMargin);
-        trPath.lineTo(width - sideMargin, sideMargin + cornerSize);
+        trPath.moveTo(width - cornerMargin - cornerSize, cornerMargin);
+        trPath.lineTo(width - cornerMargin, cornerMargin);
+        trPath.lineTo(width - cornerMargin, cornerMargin + cornerSize);
         canvas.drawPath(trPath, cornerPaint);
         
         // Bottom-left
         Path blPath = new Path();
-        blPath.moveTo(sideMargin, height - sideMargin - cornerSize);
-        blPath.lineTo(sideMargin, height - sideMargin);
-        blPath.lineTo(sideMargin + cornerSize, height - sideMargin);
+        blPath.moveTo(cornerMargin, height - cornerMargin - cornerSize);
+        blPath.lineTo(cornerMargin, height - cornerMargin);
+        blPath.lineTo(cornerMargin + cornerSize, height - cornerMargin);
         canvas.drawPath(blPath, cornerPaint);
         
         // Bottom-right
         Path brPath = new Path();
-        brPath.moveTo(width - sideMargin - cornerSize, height - sideMargin);
-        brPath.lineTo(width - sideMargin, height - sideMargin);
-        brPath.lineTo(width - sideMargin, height - sideMargin - cornerSize);
+        brPath.moveTo(width - cornerMargin - cornerSize, height - cornerMargin);
+        brPath.lineTo(width - cornerMargin, height - cornerMargin);
+        brPath.lineTo(width - cornerMargin, height - cornerMargin - cornerSize);
         canvas.drawPath(brPath, cornerPaint);
     }
     

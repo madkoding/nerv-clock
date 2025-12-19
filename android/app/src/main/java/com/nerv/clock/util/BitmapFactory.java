@@ -33,13 +33,7 @@ public final class BitmapFactory {
             Canvas canvas = new Canvas(bmp);
             canvas.drawColor(Color.parseColor(WidgetConfig.COLOR_BACKGROUND));
             
-            Paint paint = new Paint();
-            paint.setAntiAlias(true);
-            paint.setColor(Color.parseColor(WidgetConfig.COLOR_ORANGE));
-            paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(height / 5f);
-            
-            canvas.drawText("INITIALIZING...", width / 2f, height / 2f + (height / 10f), paint);
+            // No initializing message - direct rendering
             
             return bmp;
         } catch (Exception e) {
