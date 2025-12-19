@@ -189,6 +189,9 @@ public class NervClockWidget extends AppWidgetProvider {
                 clockRenderer.getClockLogic().resetLastUpdateTime();
             }
             
+            // Refresh dimensions from AppWidgetManager (important after boot/process restart)
+            refreshDimensionsFromManager(appContext);
+            
             // Initialize notification helper if needed
             if (notificationHelper == null) {
                 notificationHelper = new NotificationHelper(appContext);
@@ -316,17 +319,35 @@ public class NervClockWidget extends AppWidgetProvider {
         widgetContainerWidth = Math.max(widthPx, 400);
         widgetContainerHeight = Math.max(heightPx, 150);
         
-        // Use width as base for bitmap
+        // Use actual container dimensions for the bitmap
+        // This ensures the clock fills the widget properly when height changes
         currentWidth = widgetContainerWidth;
+        currentHeight = widgetContainerHeight;
         
-        // Calculate bitmap height maintaining the clock's natural aspect ratio
-        // This prevents stretching on different screen sizes
-        int maxAllowedHeight = (int)(currentWidth * 0.4f); // Max 2.5:1 aspect ratio
-        int minAllowedHeight = (int)(currentWidth * 0.2f); // Min 5:1 aspect ratio
-        currentHeight = Math.max(minAllowedHeight, Math.min(heightPx, maxAllowedHeight));
-        
-        Log.d(TAG, "Container: " + widgetContainerWidth + "x" + widgetContainerHeight + 
+        Log.d(TAG, "Dimensions updated - Container: " + widgetContainerWidth + "x" + widgetContainerHeight + 
               ", Bitmap: " + currentWidth + "x" + currentHeight + " (density: " + density + ")");
+    }
+    
+    /**
+     * Force update dimensions from AppWidgetManager for all widgets
+     * Called after boot when dimensions might not be passed in intent
+     */
+    private void refreshDimensionsFromManager(Context context) {
+        try {
+            AppWidgetManager mgr = AppWidgetManager.getInstance(context);
+            ComponentName widget = new ComponentName(context, NervClockWidget.class);
+            int[] ids = mgr.getAppWidgetIds(widget);
+            
+            if (ids != null && ids.length > 0) {
+                Bundle options = mgr.getAppWidgetOptions(ids[0]);
+                if (options != null && !options.isEmpty()) {
+                    updateDimensions(context, options);
+                    Log.d(TAG, "Dimensions refreshed from AppWidgetManager");
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error refreshing dimensions: " + e.getMessage());
+        }
     }
     
     private void startUpdates() {
