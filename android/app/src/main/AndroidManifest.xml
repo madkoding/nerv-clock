@@ -15,6 +15,10 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- Required for Android 13+ to use exact alarms -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Vibration permission -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Notification permission for Android 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
     <!-- Required for widgets in Android 12+ -->
     <uses-feature android:name="android.software.app_widgets" android:required="false" />
@@ -35,6 +39,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.nerv.clock.ACTION_UPDATE" />
                 <action android:name="com.nerv.clock.ACTION_STOP" />
                 <action android:name="com.nerv.clock.ACTION_SLOW" />
                 <action android:name="com.nerv.clock.ACTION_NORMAL" />
@@ -58,6 +63,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+
+        <!-- Java Clock Activity (Pure Java UI without WebView) -->
+        <activity
+            android:name=".NervClockActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="portrait"
+            android:hardwareAccelerated="true">
         </activity>
 
         <!-- Boot Receiver to restart widget after device reboot -->

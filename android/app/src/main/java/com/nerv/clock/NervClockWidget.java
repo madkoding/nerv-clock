@@ -1,41 +1,55 @@
 package com.nerv.clock;
 
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
+import android.os.BatteryManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
+import android.widget.RemoteViews;
 
-import com.nerv.clock.widget.AlarmScheduler;
-import com.nerv.clock.widget.DimensionManager;
-import com.nerv.clock.widget.WebViewManager;
-import com.nerv.clock.widget.WidgetConfig;
-import com.nerv.clock.widget.WidgetRenderer;
+import com.nerv.clock.ui.ClockViewRenderer;
+import com.nerv.clock.ui.FontManager;
 
 /**
- * NERV Clock Widget Provider.
- * Renders an animated HTML/CSS clock using WebView and displays it as a widget.
+ * NERV Clock Widget Provider - Pure Java/Canvas implementation
+ * Uses AlarmManager for reliable updates even when process is frozen
  */
-public class NervClockWidget extends AppWidgetProvider implements WebViewManager.Callback {
+public class NervClockWidget extends AppWidgetProvider {
     
     private static final String TAG = "NervClockWidget";
+    private static final String ACTION_UPDATE = "com.nerv.clock.ACTION_UPDATE";
+    private static final String ACTION_STOP = "com.nerv.clock.ACTION_STOP";
+    private static final String ACTION_SLOW = "com.nerv.clock.ACTION_SLOW";
+    private static final String ACTION_NORMAL = "com.nerv.clock.ACTION_NORMAL";
+    private static final String ACTION_RACING = "com.nerv.clock.ACTION_RACING";
+    private static final long UPDATE_INTERVAL_MS = 40; // ~25 FPS
+    private static final long ALARM_INTERVAL_MS = 1000; // 1 second alarm wakeup
     
-    // Static instances (shared across widget updates)
     private static Handler handler;
-    private static WebViewManager webViewManager;
-    private static WidgetRenderer renderer;
-    private static DimensionManager dimensions;
+    private static ClockViewRenderer clockRenderer;
+    private static NotificationHelper notificationHelper;
+    private static boolean isRunning = false;
     private static Context appContext;
+    private static long lastAlarmTime = 0;
     
-    // State tracking
-    private static boolean isUpdating = false;
-    private static int retryCount = 0;
-    private static int consecutiveFailures = 0;
-    private static long lastUpdateTime = 0;
+    // Current dimensions (bitmap)
+    private static int currentWidth = 400;
+    private static int currentHeight = 150;
+    
+    // Widget container dimensions (actual widget space)
+    private static int widgetContainerWidth = 400;
+    private static int widgetContainerHeight = 150;
     
     private static synchronized Handler getHandler() {
         if (handler == null) {
@@ -46,36 +60,71 @@ public class NervClockWidget extends AppWidgetProvider implements WebViewManager
     
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
-        Log.d(TAG, "========== NERV CLOCK " + WidgetConfig.BUILD_VERSION + " ==========");
-        Log.d(TAG, "onUpdate called with " + appWidgetIds.length + " widgets");
+        Log.d(TAG, "onUpdate: " + appWidgetIds.length + " widgets");
         
+        // Keep application context
         appContext = context.getApplicationContext();
-        initComponents(appContext);
         
-        // Calculate dimensions from first widget
+        // Initialize fonts once
+        FontManager.initialize(appContext);
+        
+        // Initialize notification helper
+        if (notificationHelper == null) {
+            notificationHelper = new NotificationHelper(appContext);
+        }
+        
+        // Initialize renderer
+        if (clockRenderer == null) {
+            clockRenderer = new ClockViewRenderer(appContext);
+            setupTimerListener();
+        }
+        
+        // Get dimensions from first widget
         if (appWidgetIds.length > 0) {
             Bundle options = appWidgetManager.getAppWidgetOptions(appWidgetIds[0]);
-            dimensions.update(context,
-                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH),
-                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT),
-                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH),
-                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT));
+            updateDimensions(appContext, options);
         }
         
-        // Show placeholder immediately
-        for (int id : appWidgetIds) {
-            renderer.showPlaceholder(appWidgetManager, id, 
-                dimensions.getRenderWidth(), dimensions.getRenderHeight());
+        // Start update loop and alarm
+        startUpdates();
+        scheduleAlarm(context);
+    }
+    
+    /**
+     * Setup listener for timer completion notifications
+     */
+    private void setupTimerListener() {
+        if (clockRenderer != null && clockRenderer.getClockLogic() != null) {
+            clockRenderer.getClockLogic().setUpdateListener(new com.nerv.clock.ui.ClockLogic.OnClockUpdateListener() {
+                @Override
+                public void onTimeUpdate(int h, int m, int s, int cs) {
+                    // Not used in widget
+                }
+                
+                @Override
+                public void onModeChanged(com.nerv.clock.ui.ClockLogic.Mode mode) {
+                    // Not used in widget
+                }
+                
+                @Override
+                public void onWarningStateChanged(com.nerv.clock.ui.ClockLogic.WarningState state) {
+                    // Not used in widget
+                }
+                
+                @Override
+                public void onDepletedStateChanged(boolean isDepleted) {
+                    // Not used in widget
+                }
+                
+                @Override
+                public void onTimerComplete(int durationMinutes) {
+                    Log.d(TAG, "Timer complete! Duration: " + durationMinutes + " minutes");
+                    if (notificationHelper != null) {
+                        notificationHelper.showTimerCompleteNotification(durationMinutes);
+                    }
+                }
+            });
         }
-        
-        // Show native time as fallback
-        renderer.showNativeTime(dimensions.getRenderWidth(), dimensions.getRenderHeight());
-        
-        // Schedule alarm for periodic updates
-        AlarmScheduler.scheduleAlarm(context, NervClockWidget.class);
-        
-        // Start WebView
-        startWebView();
     }
     
     @Override
@@ -83,240 +132,348 @@ public class NervClockWidget extends AppWidgetProvider implements WebViewManager
             int appWidgetId, Bundle newOptions) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions);
         
-        Log.d(TAG, "Widget options changed for " + appWidgetId);
+        Log.d(TAG, "Widget resized");
         
-        appContext = context.getApplicationContext();
-        initComponents(appContext);
+        // Update dimensions
+        updateDimensions(context, newOptions);
         
-        dimensions.update(context,
-            newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH),
-            newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT),
-            newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH),
-            newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT));
-        
-        // Restart WebView with new dimensions
-        stopWebView();
-        startWebView();
-    }
-    
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        String action = intent.getAction();
-        Log.d(TAG, "onReceive: " + action);
-        
-        // Always let parent handle standard widget actions first
-        super.onReceive(context, intent);
-        
-        if (action == null) {
-            return;
-        }
-        
-        appContext = context.getApplicationContext();
-        initComponents(appContext);
-        
-        // Handle custom actions
-        switch (action) {
-            case Intent.ACTION_MY_PACKAGE_REPLACED:
-                handlePackageReplaced(context);
-                break;
-                
-            case WidgetConfig.ACTION_WAKE_UPDATE:
-                handleWakeUpdate(context);
-                break;
-                
-            case WidgetConfig.ACTION_STOP:
-                executeJS("nervClock.setMode('stop')");
-                break;
-                
-            case WidgetConfig.ACTION_SLOW:
-                executeJS("nervClock.setMode('slow')");
-                break;
-                
-            case WidgetConfig.ACTION_NORMAL:
-                executeJS("nervClock.setMode('normal')");
-                break;
-                
-            case WidgetConfig.ACTION_RACING:
-                executeJS("nervClock.setMode('racing')");
-                break;
-        }
+        // Force immediate update
+        updateAllWidgets(context);
     }
     
     @Override
     public void onEnabled(Context context) {
         super.onEnabled(context);
         Log.d(TAG, "Widget enabled");
-        AlarmScheduler.scheduleAlarm(context, NervClockWidget.class);
+        appContext = context.getApplicationContext();
+        FontManager.initialize(appContext);
+        scheduleAlarm(context);
     }
     
     @Override
     public void onDisabled(Context context) {
         super.onDisabled(context);
         Log.d(TAG, "Widget disabled");
-        AlarmScheduler.cancelAlarm(context, NervClockWidget.class);
-        stopWebView();
-    }
-    
-    // ==================== WebViewManager.Callback ====================
-    
-    @Override
-    public void onPageLoaded() {
-        Log.d(TAG, "WebView page loaded");
-        isUpdating = true;
-        retryCount = 0;
-        consecutiveFailures = 0;
-        scheduleUpdate();
+        stopUpdates();
+        cancelAlarm(context);
     }
     
     @Override
-    public void onError(String message) {
-        Log.e(TAG, "WebView error: " + message);
-        retryWithBackoff();
-    }
-    
-    // ==================== Private Methods ====================
-    
-    private void initComponents(Context context) {
-        if (dimensions == null) {
-            dimensions = new DimensionManager();
-        }
-        if (renderer == null) {
-            renderer = new WidgetRenderer(context, NervClockWidget.class);
-        }
-        if (webViewManager == null) {
-            webViewManager = new WebViewManager(context);
-            webViewManager.setCallback(this);
-        }
-    }
-    
-    private void startWebView() {
-        if (webViewManager == null || appContext == null) return;
+    public void onReceive(Context context, Intent intent) {
+        super.onReceive(context, intent);
         
-        if (webViewManager.isReady() && webViewManager.getAge() < 60000) {
-            Log.d(TAG, "WebView already ready, skipping creation");
-            return;
+        String action = intent.getAction();
+        if (action == null) return;
+        
+        Log.d(TAG, "onReceive action: " + action);
+        
+        // Store app context
+        if (appContext == null) {
+            appContext = context.getApplicationContext();
         }
         
-        if (webViewManager.isCreating()) {
-            Log.d(TAG, "WebView creation in progress");
-            return;
-        }
-        
-        webViewManager.create(dimensions.getRenderWidth(), dimensions.getRenderHeight());
-    }
-    
-    private void stopWebView() {
-        isUpdating = false;
-        if (webViewManager != null) {
-            webViewManager.destroy();
-        }
-    }
-    
-    private void handlePackageReplaced(Context context) {
-        Log.d(TAG, "Package replaced, refreshing widget");
-        stopWebView();
-        retryCount = 0;
-        consecutiveFailures = 0;
-        
-        AppWidgetManager mgr = AppWidgetManager.getInstance(context);
-        int[] ids = renderer.getWidgetIds(mgr);
-        if (ids.length > 0) {
-            onUpdate(context, mgr, ids);
-        }
-    }
-    
-    private void handleWakeUpdate(Context context) {
-        Log.d(TAG, "Wake update received");
-        
-        // Re-schedule alarm for next interval
-        AlarmScheduler.scheduleAlarm(context, NervClockWidget.class);
-        
-        // Force widget update
-        if (webViewManager != null && webViewManager.isReady()) {
-            updateWidget();
-        } else {
-            Log.d(TAG, "WebView not ready, restarting...");
-            AppWidgetManager mgr = AppWidgetManager.getInstance(context);
-            int[] ids = renderer.getWidgetIds(mgr);
-            if (ids.length > 0) {
-                onUpdate(context, mgr, ids);
+        // Handle alarm wakeup - this is the key to surviving process freeze
+        if (ACTION_UPDATE.equals(action)) {
+            Log.d(TAG, "Alarm wakeup received");
+            
+            // Re-initialize if needed
+            if (clockRenderer == null) {
+                FontManager.initialize(appContext);
+                clockRenderer = new ClockViewRenderer(appContext);
+                setupTimerListener();
             }
+            
+            // Initialize notification helper if needed
+            if (notificationHelper == null) {
+                notificationHelper = new NotificationHelper(appContext);
+            }
+            
+            // Ensure updates are running
+            startUpdates();
+            
+            // Schedule next alarm
+            scheduleAlarm(context);
+            return;
+        }
+        
+        // Handle mode changes - initialize renderer if needed
+        if (ACTION_STOP.equals(action) || ACTION_SLOW.equals(action) || 
+            ACTION_NORMAL.equals(action) || ACTION_RACING.equals(action)) {
+            
+            // Initialize renderer if needed
+            if (clockRenderer == null) {
+                FontManager.initialize(appContext);
+                clockRenderer = new ClockViewRenderer(appContext);
+                setupTimerListener();
+            }
+            
+            // Initialize notification helper if needed
+            if (notificationHelper == null) {
+                notificationHelper = new NotificationHelper(appContext);
+            }
+            
+            switch (action) {
+                case ACTION_STOP:
+                    // Toggle pause/play instead of setting mode to STOP
+                    clockRenderer.getClockLogic().togglePause();
+                    Log.d(TAG, "Toggle pause: " + (clockRenderer.getClockLogic().isPaused() ? "PAUSED" : "PLAYING"));
+                    break;
+                case ACTION_SLOW:
+                    clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.SLOW);
+                    Log.d(TAG, "Mode changed to SLOW");
+                    break;
+                case ACTION_NORMAL:
+                    clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.NORMAL);
+                    Log.d(TAG, "Mode changed to NORMAL");
+                    break;
+                case ACTION_RACING:
+                    clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.RACING);
+                    Log.d(TAG, "Mode changed to RACING");
+                    break;
+            }
+            
+            // Force immediate update after mode change
+            startUpdates();
+            updateAllWidgets(context);
         }
     }
     
-    private void executeJS(String script) {
-        if (webViewManager != null) {
-            webViewManager.executeJS(script);
-            Log.d(TAG, "Executed JS: " + script);
+    private PendingIntent createPendingIntent(Context context, String action, int requestCode) {
+        Intent intent = new Intent(context, NervClockWidget.class);
+        intent.setAction(action);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        return PendingIntent.getBroadcast(context, requestCode, intent, flags);
+    }
+    
+    private void scheduleAlarm(Context context) {
+        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (alarmManager == null) return;
+        
+        Intent intent = new Intent(context, NervClockWidget.class);
+        intent.setAction(ACTION_UPDATE);
+        
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, intent, flags);
+        
+        long triggerTime = SystemClock.elapsedRealtime() + ALARM_INTERVAL_MS;
+        
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerTime, pendingIntent);
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                alarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerTime, pendingIntent);
+            } else {
+                alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerTime, pendingIntent);
+            }
+            lastAlarmTime = System.currentTimeMillis();
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to schedule alarm: " + e.getMessage());
         }
     }
     
-    private void scheduleUpdate() {
+    private void cancelAlarm(Context context) {
+        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (alarmManager == null) return;
+        
+        Intent intent = new Intent(context, NervClockWidget.class);
+        intent.setAction(ACTION_UPDATE);
+        
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, intent, flags);
+        alarmManager.cancel(pendingIntent);
+    }
+    
+    private void updateDimensions(Context context, Bundle options) {
+        float density = context.getResources().getDisplayMetrics().density;
+        
+        int minW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 200);
+        int maxW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 400);
+        int minH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 100);
+        int maxH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 150);
+        
+        // Convert to pixels - these are the actual widget container dimensions
+        int widthPx = (int)(maxW * density);
+        int heightPx = (int)(maxH * density);
+        
+        // Store widget container dimensions
+        widgetContainerWidth = Math.max(widthPx, 400);
+        widgetContainerHeight = Math.max(heightPx, 150);
+        
+        // Use width as base for bitmap
+        currentWidth = widgetContainerWidth;
+        
+        // Calculate bitmap height maintaining the clock's natural aspect ratio
+        // This prevents stretching on different screen sizes
+        int maxAllowedHeight = (int)(currentWidth * 0.4f); // Max 2.5:1 aspect ratio
+        int minAllowedHeight = (int)(currentWidth * 0.2f); // Min 5:1 aspect ratio
+        currentHeight = Math.max(minAllowedHeight, Math.min(heightPx, maxAllowedHeight));
+        
+        Log.d(TAG, "Container: " + widgetContainerWidth + "x" + widgetContainerHeight + 
+              ", Bitmap: " + currentWidth + "x" + currentHeight + " (density: " + density + ")");
+    }
+    
+    private void startUpdates() {
+        if (isRunning) return;
+        isRunning = true;
+        
+        scheduleNextUpdate();
+    }
+    
+    private void stopUpdates() {
+        isRunning = false;
+        getHandler().removeCallbacksAndMessages(null);
+    }
+    
+    private void scheduleNextUpdate() {
+        if (!isRunning || appContext == null) return;
+        
         getHandler().postDelayed(() -> {
-            if (!isUpdating || webViewManager == null) return;
+            if (!isRunning || appContext == null) return;
             
-            // Detect freeze
-            long now = System.currentTimeMillis();
-            if (lastUpdateTime > 0 && 
-                (now - lastUpdateTime) > WidgetConfig.FREEZE_DETECTION_THRESHOLD_MS) {
-                Log.d(TAG, "Freeze detected, refreshing clock");
-                executeJS("if(typeof updateClock === 'function') updateClock();");
-            }
-            lastUpdateTime = now;
-            
-            updateWidget();
-            scheduleUpdate();
-        }, WidgetConfig.UPDATE_INTERVAL_MS);
+            updateAllWidgets(appContext);
+            scheduleNextUpdate();
+        }, UPDATE_INTERVAL_MS);
     }
     
-    private void updateWidget() {
-        if (webViewManager == null || !webViewManager.isReady()) {
-            retryWithBackoff();
-            return;
-        }
+    private boolean isCharging(Context context) {
+        IntentFilter filter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+        Intent batteryStatus = context.registerReceiver(null, filter);
+        if (batteryStatus == null) return false;
         
-        Bitmap bitmap = webViewManager.render(
-            dimensions.getRenderWidth(), dimensions.getRenderHeight());
-        
-        if (bitmap != null && renderer != null) {
-            renderer.updateWithBitmap(bitmap);
+        int status = batteryStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+        return status == BatteryManager.BATTERY_STATUS_CHARGING ||
+               status == BatteryManager.BATTERY_STATUS_FULL;
+    }
+    
+    private void updateAllWidgets(Context context) {
+        try {
+            if (clockRenderer == null) {
+                FontManager.initialize(context);
+                clockRenderer = new ClockViewRenderer(context);
+                setupTimerListener();
+            }
+            
+            // Initialize notification helper if needed
+            if (notificationHelper == null) {
+                notificationHelper = new NotificationHelper(context);
+            }
+            
+            // Check charging state and update renderer
+            clockRenderer.setCharging(isCharging(context));
+            
+            // No corner radius needed - system applies it automatically on Android 12+
+            // and on older versions we use rectangular widgets
+            clockRenderer.setCornerRadius(0);
+            
+            // Render to bitmap
+            Bitmap bitmap = renderClock();
+            if (bitmap == null) return;
+            
+            // Update all widgets
+            AppWidgetManager mgr = AppWidgetManager.getInstance(context);
+            ComponentName widget = new ComponentName(context, NervClockWidget.class);
+            int[] ids = mgr.getAppWidgetIds(widget);
+            
+            if (ids.length == 0) {
+                Log.d(TAG, "No widgets found, stopping updates");
+                stopUpdates();
+                return;
+            }
+            
+            for (int id : ids) {
+                RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_canvas);
+                views.setImageViewBitmap(R.id.widget_image, bitmap);
+                
+                // Calculate button positioning for API 31+ with centerInside scaling
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    // With centerInside, the image is scaled to fit and centered
+                    float scaleX = (float) widgetContainerWidth / currentWidth;
+                    float scaleY = (float) widgetContainerHeight / currentHeight;
+                    float scale = Math.min(scaleX, scaleY);
+                    
+                    int scaledImageWidth = (int)(currentWidth * scale);
+                    int scaledImageHeight = (int)(currentHeight * scale);
+                    
+                    // Control bar ratios from ClockViewRenderer (relative to WIDTH)
+                    float controlBarHeightRatio = 0.05f;
+                    float bottomMarginRatio = 0.01f;
+                    float sideMarginRatio = 0.02f;
+                    
+                    // Calculate in scaled coordinates
+                    int scaledControlBarHeight = (int)(scaledImageWidth * controlBarHeightRatio);
+                    int scaledBottomMargin = (int)(scaledImageWidth * bottomMarginRatio);
+                    int scaledSideMargin = (int)(scaledImageWidth * sideMarginRatio);
+                    
+                    // Offset from container edges to centered image
+                    int imageVerticalOffset = (widgetContainerHeight - scaledImageHeight) / 2;
+                    int imageHorizontalOffset = (widgetContainerWidth - scaledImageWidth) / 2;
+                    
+                    // Android 12+ widget container has extra space below the visible image
+                    // for system UI and rounded corners. This extra space is significant.
+                    // Approximately 17% of container height based on visual calibration
+                    int extraBottomSpace = (int)(widgetContainerHeight * 0.17f);
+                    
+                    // Total bottom margin = image offset + internal margin + extra space
+                    int buttonBottomMargin = imageVerticalOffset + scaledBottomMargin + extraBottomSpace;
+                    int buttonSideMargin = imageHorizontalOffset + scaledSideMargin;
+                    
+                    Log.d(TAG, "Button calc: container=" + widgetContainerWidth + "x" + widgetContainerHeight + 
+                          ", scaled=" + scaledImageWidth + "x" + scaledImageHeight +
+                          ", vOffset=" + imageVerticalOffset + ", extraBottom=" + extraBottomSpace +
+                          ", bottomM=" + buttonBottomMargin);
+                    
+                    views.setViewLayoutHeight(R.id.button_container, scaledControlBarHeight, android.util.TypedValue.COMPLEX_UNIT_PX);
+                    
+                    views.setViewLayoutMargin(R.id.button_container, 
+                        android.widget.RemoteViews.MARGIN_BOTTOM, 
+                        buttonBottomMargin, 
+                        android.util.TypedValue.COMPLEX_UNIT_PX);
+                    
+                    views.setViewLayoutMargin(R.id.button_container,
+                        android.widget.RemoteViews.MARGIN_START,
+                        buttonSideMargin,
+                        android.util.TypedValue.COMPLEX_UNIT_PX);
+                    views.setViewLayoutMargin(R.id.button_container,
+                        android.widget.RemoteViews.MARGIN_END,
+                        buttonSideMargin,
+                        android.util.TypedValue.COMPLEX_UNIT_PX);
+                }
+                
+                // Set up click handlers for buttons
+                views.setOnClickPendingIntent(R.id.btn_stop, createPendingIntent(context, ACTION_STOP, 1));
+                views.setOnClickPendingIntent(R.id.btn_slow, createPendingIntent(context, ACTION_SLOW, 2));
+                views.setOnClickPendingIntent(R.id.btn_normal, createPendingIntent(context, ACTION_NORMAL, 3));
+                views.setOnClickPendingIntent(R.id.btn_racing, createPendingIntent(context, ACTION_RACING, 4));
+                
+                mgr.updateAppWidget(id, views);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Update error: " + e.getMessage());
         }
     }
     
-    private void retryWithBackoff() {
-        consecutiveFailures++;
-        Log.d(TAG, "Consecutive failures: " + consecutiveFailures);
-        
-        // Check threshold
-        if (consecutiveFailures >= WidgetConfig.CONSECUTIVE_FAILURES_THRESHOLD) {
-            Log.e(TAG, "Max consecutive failures reached, showing native time and resetting");
-            if (renderer != null) {
-                renderer.showNativeTime(dimensions.getRenderWidth(), dimensions.getRenderHeight());
-            }
-            // Reset counters and retry after delay
-            consecutiveFailures = 0;
-            retryCount = 0;
-            stopWebView();
-            getHandler().postDelayed(this::startWebView, WidgetConfig.RETRY_RESET_DELAY_MS);
-            return;
-        }
-        
-        if (retryCount >= WidgetConfig.MAX_RETRY_COUNT) {
-            Log.e(TAG, "Max retries reached, showing error");
-            if (renderer != null) {
-                renderer.showError(dimensions.getRenderWidth(), dimensions.getRenderHeight());
-            }
+    private Bitmap renderClock() {
+        try {
+            if (currentWidth <= 0 || currentHeight <= 0) return null;
             
-            retryCount = 0;
-            getHandler().postDelayed(this::startWebView, WidgetConfig.RETRY_RESET_DELAY_MS);
-            return;
+            Bitmap bitmap = Bitmap.createBitmap(currentWidth, currentHeight, Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
+            clockRenderer.drawClock(canvas, currentWidth, currentHeight);
+            return bitmap;
+        } catch (Exception e) {
+            Log.e(TAG, "Render error: " + e.getMessage());
+            return null;
         }
-        
-        retryCount++;
-        int delay = 1000 * retryCount;
-        Log.d(TAG, "Retrying in " + delay + "ms (attempt " + retryCount + ")");
-        
-        stopWebView();
-        getHandler().postDelayed(this::startWebView, delay);
     }
 }
