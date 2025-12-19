@@ -11,6 +11,7 @@ import android.os.Looper;
 import android.util.Log;
 
 import com.nerv.clock.widget.AlarmScheduler;
+import com.nerv.clock.widget.CanvasClockRenderer;
 import com.nerv.clock.widget.DimensionManager;
 import com.nerv.clock.widget.WebViewManager;
 import com.nerv.clock.widget.WidgetConfig;
@@ -27,6 +28,7 @@ public class NervClockWidget extends AppWidgetProvider implements WebViewManager
     // Static instances (shared across widget updates)
     private static Handler handler;
     private static WebViewManager webViewManager;
+    private static CanvasClockRenderer canvasRenderer;
     private static WidgetRenderer renderer;
     private static DimensionManager dimensions;
     private static Context appContext;
@@ -183,6 +185,9 @@ public class NervClockWidget extends AppWidgetProvider implements WebViewManager
         if (renderer == null) {
             renderer = new WidgetRenderer(context, NervClockWidget.class);
         }
+        if (canvasRenderer == null) {
+            canvasRenderer = new CanvasClockRenderer(context);
+        }
         if (webViewManager == null) {
             webViewManager = new WebViewManager(context);
             webViewManager.setCallback(this);
@@ -270,16 +275,26 @@ public class NervClockWidget extends AppWidgetProvider implements WebViewManager
     }
     
     private void updateWidget() {
-        if (webViewManager == null || !webViewManager.isReady()) {
+        try {
+            // Use Canvas renderer instead of WebView
+            if (canvasRenderer == null) {
+                retryWithBackoff();
+                return;
+            }
+            
+            Bitmap bitmap = canvasRenderer.renderClockBitmap(
+                dimensions.getRenderWidth(), 
+                dimensions.getRenderHeight());
+            
+            if (bitmap != null && renderer != null) {
+                renderer.updateWithBitmap(bitmap);
+                consecutiveFailures = 0; // Reset on success
+            } else {
+                retryWithBackoff();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in updateWidget: " + e.getMessage());
             retryWithBackoff();
-            return;
-        }
-        
-        Bitmap bitmap = webViewManager.render(
-            dimensions.getRenderWidth(), dimensions.getRenderHeight());
-        
-        if (bitmap != null && renderer != null) {
-            renderer.updateWithBitmap(bitmap);
         }
     }
     
