@@ -42,9 +42,13 @@ public class NervClockWidget extends AppWidgetProvider {
     private static Context appContext;
     private static long lastAlarmTime = 0;
     
-    // Current dimensions
+    // Current dimensions (bitmap)
     private static int currentWidth = 400;
     private static int currentHeight = 150;
+    
+    // Widget container dimensions (actual widget space)
+    private static int widgetContainerWidth = 400;
+    private static int widgetContainerHeight = 150;
     
     private static synchronized Handler getHandler() {
         if (handler == null) {
@@ -117,6 +121,8 @@ public class NervClockWidget extends AppWidgetProvider {
         String action = intent.getAction();
         if (action == null) return;
         
+        Log.d(TAG, "onReceive action: " + action);
+        
         // Store app context
         if (appContext == null) {
             appContext = context.getApplicationContext();
@@ -152,8 +158,9 @@ public class NervClockWidget extends AppWidgetProvider {
             
             switch (action) {
                 case ACTION_STOP:
-                    clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.STOP);
-                    Log.d(TAG, "Mode changed to STOP");
+                    // Toggle pause/play instead of setting mode to STOP
+                    clockRenderer.getClockLogic().togglePause();
+                    Log.d(TAG, "Toggle pause: " + (clockRenderer.getClockLogic().isPaused() ? "PAUSED" : "PLAYING"));
                     break;
                 case ACTION_SLOW:
                     clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.SLOW);
@@ -239,16 +246,25 @@ public class NervClockWidget extends AppWidgetProvider {
         int minH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 100);
         int maxH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 150);
         
-        // Convert to pixels
+        // Convert to pixels - these are the actual widget container dimensions
         int widthPx = (int)(maxW * density);
         int heightPx = (int)(maxH * density);
         
-        // Use actual dimensions reported by Android - no manipulation
-        // This ensures the bitmap matches the widget space exactly
-        currentWidth = Math.max(widthPx, 400);
-        currentHeight = Math.max(heightPx, 150);
+        // Store widget container dimensions
+        widgetContainerWidth = Math.max(widthPx, 400);
+        widgetContainerHeight = Math.max(heightPx, 150);
         
-        Log.d(TAG, "Dimensions: " + currentWidth + "x" + currentHeight + " (density: " + density + ")");
+        // Use width as base for bitmap
+        currentWidth = widgetContainerWidth;
+        
+        // Calculate bitmap height maintaining the clock's natural aspect ratio
+        // This prevents stretching on different screen sizes
+        int maxAllowedHeight = (int)(currentWidth * 0.4f); // Max 2.5:1 aspect ratio
+        int minAllowedHeight = (int)(currentWidth * 0.2f); // Min 5:1 aspect ratio
+        currentHeight = Math.max(minAllowedHeight, Math.min(heightPx, maxAllowedHeight));
+        
+        Log.d(TAG, "Container: " + widgetContainerWidth + "x" + widgetContainerHeight + 
+              ", Bitmap: " + currentWidth + "x" + currentHeight + " (density: " + density + ")");
     }
     
     private void startUpdates() {
@@ -294,6 +310,10 @@ public class NervClockWidget extends AppWidgetProvider {
             // Check charging state and update renderer
             clockRenderer.setCharging(isCharging(context));
             
+            // No corner radius needed - system applies it automatically on Android 12+
+            // and on older versions we use rectangular widgets
+            clockRenderer.setCornerRadius(0);
+            
             // Render to bitmap
             Bitmap bitmap = renderClock();
             if (bitmap == null) return;
@@ -313,11 +333,59 @@ public class NervClockWidget extends AppWidgetProvider {
                 RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_canvas);
                 views.setImageViewBitmap(R.id.widget_image, bitmap);
                 
-                // Calculate button container height (approximately 15% of widget height)
-                // setViewLayoutHeight is only available in API 31+
+                // Calculate button positioning for API 31+ with centerInside scaling
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    int buttonHeight = (int)(currentHeight * 0.15f);
-                    views.setViewLayoutHeight(R.id.button_container, buttonHeight, android.util.TypedValue.COMPLEX_UNIT_PX);
+                    // With centerInside, the image is scaled to fit and centered
+                    float scaleX = (float) widgetContainerWidth / currentWidth;
+                    float scaleY = (float) widgetContainerHeight / currentHeight;
+                    float scale = Math.min(scaleX, scaleY);
+                    
+                    int scaledImageWidth = (int)(currentWidth * scale);
+                    int scaledImageHeight = (int)(currentHeight * scale);
+                    
+                    // Control bar ratios from ClockViewRenderer (relative to WIDTH)
+                    float controlBarHeightRatio = 0.05f;
+                    float bottomMarginRatio = 0.01f;
+                    float sideMarginRatio = 0.02f;
+                    
+                    // Calculate in scaled coordinates
+                    int scaledControlBarHeight = (int)(scaledImageWidth * controlBarHeightRatio);
+                    int scaledBottomMargin = (int)(scaledImageWidth * bottomMarginRatio);
+                    int scaledSideMargin = (int)(scaledImageWidth * sideMarginRatio);
+                    
+                    // Offset from container edges to centered image
+                    int imageVerticalOffset = (widgetContainerHeight - scaledImageHeight) / 2;
+                    int imageHorizontalOffset = (widgetContainerWidth - scaledImageWidth) / 2;
+                    
+                    // Android 12+ widget container has extra space below the visible image
+                    // for system UI and rounded corners. This extra space is significant.
+                    // Approximately 17% of container height based on visual calibration
+                    int extraBottomSpace = (int)(widgetContainerHeight * 0.17f);
+                    
+                    // Total bottom margin = image offset + internal margin + extra space
+                    int buttonBottomMargin = imageVerticalOffset + scaledBottomMargin + extraBottomSpace;
+                    int buttonSideMargin = imageHorizontalOffset + scaledSideMargin;
+                    
+                    Log.d(TAG, "Button calc: container=" + widgetContainerWidth + "x" + widgetContainerHeight + 
+                          ", scaled=" + scaledImageWidth + "x" + scaledImageHeight +
+                          ", vOffset=" + imageVerticalOffset + ", extraBottom=" + extraBottomSpace +
+                          ", bottomM=" + buttonBottomMargin);
+                    
+                    views.setViewLayoutHeight(R.id.button_container, scaledControlBarHeight, android.util.TypedValue.COMPLEX_UNIT_PX);
+                    
+                    views.setViewLayoutMargin(R.id.button_container, 
+                        android.widget.RemoteViews.MARGIN_BOTTOM, 
+                        buttonBottomMargin, 
+                        android.util.TypedValue.COMPLEX_UNIT_PX);
+                    
+                    views.setViewLayoutMargin(R.id.button_container,
+                        android.widget.RemoteViews.MARGIN_START,
+                        buttonSideMargin,
+                        android.util.TypedValue.COMPLEX_UNIT_PX);
+                    views.setViewLayoutMargin(R.id.button_container,
+                        android.widget.RemoteViews.MARGIN_END,
+                        buttonSideMargin,
+                        android.util.TypedValue.COMPLEX_UNIT_PX);
                 }
                 
                 // Set up click handlers for buttons

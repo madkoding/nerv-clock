@@ -33,8 +33,11 @@ public class ClockLogic {
     
     // Pomodoro state
     private static final long POMODORO_25MIN = 25 * 60 * 1000;
+    private static final long POMODORO_15MIN = 15 * 60 * 1000;
+    private static final long POMODORO_10MIN = 10 * 60 * 1000;
     private static final long POMODORO_5MIN = 5 * 60 * 1000;
-    private long[] pomoDurations = { POMODORO_25MIN, POMODORO_5MIN };
+    private static final long POMODORO_1MIN = 1 * 60 * 1000;
+    private long[] pomoDurations = { POMODORO_25MIN, POMODORO_15MIN, POMODORO_10MIN, POMODORO_5MIN, POMODORO_1MIN };
     private int pomoDurationIndex = 0;
     private long pomodoroDuration = POMODORO_25MIN;
     private long pomodoroRemaining = POMODORO_25MIN;
@@ -170,7 +173,7 @@ public class ClockLogic {
         
         // Special case: SLOW mode toggles duration on repeated click
         if (mode == Mode.SLOW && currentMode == Mode.SLOW) {
-            pomoDurationIndex = (pomoDurationIndex + 1) % 2;
+            pomoDurationIndex = (pomoDurationIndex + 1) % pomoDurations.length;
             pomodoroDuration = pomoDurations[pomoDurationIndex];
             pomodoroRemaining = pomodoroDuration;
             isDepleted = false;

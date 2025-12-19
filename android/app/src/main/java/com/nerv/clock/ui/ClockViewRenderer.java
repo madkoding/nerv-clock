@@ -22,6 +22,9 @@ public class ClockViewRenderer {
     private Context context;
     private ClockLogic clockLogic;
     
+    // Corner radius for Android 12+ rounded widgets
+    private float cornerRadius = 0;
+    
     // Paints
     private Paint digitPaint;
     private Paint colonPaint;
@@ -61,6 +64,10 @@ public class ClockViewRenderer {
     
     public void setCharging(boolean charging) {
         this.isCharging = charging;
+    }
+    
+    public void setCornerRadius(float radius) {
+        this.cornerRadius = radius;
     }
     
     private void initializePaints() {
@@ -126,14 +133,27 @@ public class ClockViewRenderer {
         float topMargin = baseUnit * 0.01f;
         float bottomMargin = baseUnit * 0.01f;
         
+        // Apply corner clipping if needed (for Android 12+ rounded widgets)
+        if (cornerRadius > 0) {
+            Path clipPath = new Path();
+            RectF rect = new RectF(0, 0, width, height);
+            clipPath.addRoundRect(rect, cornerRadius, cornerRadius, Path.Direction.CW);
+            canvas.clipPath(clipPath);
+        }
+        
         // Draw background
         drawBackground(canvas, width, height);
         
         // Draw hexagon pattern
         drawHexagonPattern(canvas, width, height);
         
-        // Draw border
-        canvas.drawRect(2, 2, width - 2, height - 2, borderPaint);
+        // Draw border (rounded if needed)
+        if (cornerRadius > 0) {
+            RectF borderRect = new RectF(2, 2, width - 2, height - 2);
+            canvas.drawRoundRect(borderRect, cornerRadius, cornerRadius, borderPaint);
+        } else {
+            canvas.drawRect(2, 2, width - 2, height - 2, borderPaint);
+        }
         
         // Draw top bar
         drawTopBar(canvas, width, baseUnit, sideMargin, topMargin, topBarHeight);
@@ -555,8 +575,9 @@ public class ClockViewRenderer {
         linePaint.setStrokeWidth(1);
         canvas.drawLine(sideMargin, controlBarTop, width - sideMargin, controlBarTop, linePaint);
         
-        // Draw 4 buttons
-        String[] buttonModes = {"STOP", "SLOW", "NORMAL", "RACING"};
+        // Draw 4 buttons - first button shows STOP or PLAY depending on pause state
+        boolean isPaused = clockLogic.isPaused();
+        String[] buttonModes = {isPaused ? "PLAY" : "STOP", "SLOW", "NORMAL", "RACING"};
         ClockLogic.Mode[] modes = {ClockLogic.Mode.STOP, ClockLogic.Mode.SLOW, ClockLogic.Mode.NORMAL, ClockLogic.Mode.RACING};
         int[] buttonColors = {
             ColorScheme.NERV_GREEN,
@@ -579,7 +600,8 @@ public class ClockViewRenderer {
             RectF buttonRect = new RectF(buttonLeft, buttonTop, buttonLeft + buttonWidth, buttonTop + buttonHeight);
             
             // Check if this button is active
-            boolean isActive = (currentMode == modes[i]);
+            // For STOP/PLAY button (i==0), it's active when paused
+            boolean isActive = (i == 0) ? isPaused : (currentMode == modes[i]);
             
             // Draw button background - use active color if this mode is selected
             Paint bgPaint = new Paint();

@@ -1,60 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- NERV Clock Widget - Canvas rendering for Android 12+ -->
-<!-- Disable system rounded corners -->
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/transparent"
-    android:clipToOutline="false"
-    android:clipToPadding="false"
-    android:clipChildren="false">
+    android:background="@android:color/transparent">
 
     <ImageView
         android:id="@+id/widget_image"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:scaleType="fitCenter"
-        android:adjustViewBounds="true"
-        android:clipToOutline="false"
+        android:scaleType="centerInside"
         android:contentDescription="NERV Clock" />
 
-    <!-- Invisible button overlay for control bar -->
     <LinearLayout
         android:id="@+id/button_container"
         android:layout_width="match_parent"
-        android:layout_height="24dp"
+        android:layout_height="60dp"
         android:layout_alignParentBottom="true"
-        android:orientation="horizontal"
-        android:background="@android:color/transparent">
+        android:orientation="horizontal">
 
-        <View
+        <TextView
             android:id="@+id/btn_stop"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?android:attr/selectableItemBackground" />
+            android:layout_weight="1" />
 
-        <View
+        <TextView
             android:id="@+id/btn_slow"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?android:attr/selectableItemBackground" />
+            android:layout_weight="1" />
 
-        <View
+        <TextView
             android:id="@+id/btn_normal"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?android:attr/selectableItemBackground" />
+            android:layout_weight="1" />
 
-        <View
+        <TextView
             android:id="@+id/btn_racing"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?android:attr/selectableItemBackground" />
+            android:layout_weight="1" />
 
     </LinearLayout>
 
