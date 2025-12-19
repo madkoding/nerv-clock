@@ -54,26 +54,6 @@
                 android:resource="@xml/widget_info" />
         </receiver>
 
-        <!-- Main Activity (required by some OEMs for widget picker) -->
-        <activity
-            android:name=".ui.MainActivity"
-            android:exported="true"
-            android:theme="@style/Theme.NervClock">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-        <!-- Java Clock Activity (Pure Java UI without WebView) -->
-        <activity
-            android:name=".NervClockActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
-            android:screenOrientation="portrait"
-            android:hardwareAccelerated="true">
-        </activity>
-
         <!-- Boot Receiver to restart widget after device reboot -->
         <receiver
             android:name=".BootReceiver"
