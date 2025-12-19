@@ -21,6 +21,12 @@ import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
 import android.widget.RemoteViews;
 import android.util.Log;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.io.BufferedWriter;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import android.util.DisplayMetrics;
 
 public class NervClockWidget extends AppWidgetProvider {
@@ -39,17 +45,24 @@ public class NervClockWidget extends AppWidgetProvider {
     private static int lastRenderHeight = 0;
     private static final int UPDATE_INTERVAL = 75; // ~13 fps (battery saving)
     private static final int PAGE_LOAD_TIMEOUT = 10000; // 10 seconds timeout for page load
-    private static final int WEBVIEW_INIT_DELAY = 100; // Reduced delay before creating WebView
+    private static final int WEBVIEW_INIT_DELAY = 0; // Reduced delay before creating WebView
     private static final int MAX_RETRY_COUNT = 3;
     private static final int RETRY_RESET_DELAY = 30000; // 30 seconds before retrying after max failures
+    private static final int CONSECUTIVE_FAILURES_THRESHOLD = 5; // Switch to native mode after 5 consecutive failures
+    private static final int NATIVE_UPDATE_INTERVAL = 60000; // Update native time every 60 seconds
     private static int retryCount = 0;
+    private static int consecutiveFailures = 0; // Track consecutive WebView failures
     private static boolean showingError = false;
+    private static boolean useNativeOnly = false; // Fallback to native-only mode if WebView repeatedly fails
     private static Context appContext;
     private static long lastAppUpdateTime = 0;
     private static long lastWakeCheck = 0;
+    private static long lastNativeUpdate = 0;
     private static long webViewCreationTime = 0;
     private static final long WAKE_CHECK_INTERVAL = 30000; // 30 seconds
     private static final long ALARM_INTERVAL = 60000; // 1 minute
+    private static final String PREFS_NAME = "NervClockWidget";
+    private static final String PREF_USE_NATIVE_ONLY = "use_native_only";
     
     // Actions for buttons
     public static final String ACTION_STOP = "com.nerv.clock.ACTION_STOP";
@@ -134,8 +147,41 @@ public class NervClockWidget extends AppWidgetProvider {
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
         Log.d(TAG, "onUpdate called with " + appWidgetIds.length + " widgets");
+        // Diagnostic toast so we can see updates without adb
+        try { android.widget.Toast.makeText(context, "NERV: onUpdate called", android.widget.Toast.LENGTH_SHORT).show(); } catch (Exception ignored) {}
         
         appContext = context.getApplicationContext();
+        
+        // Load native-only preference from SharedPreferences
+        android.content.SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        useNativeOnly = prefs.getBoolean(PREF_USE_NATIVE_ONLY, false);
+        
+        // If we're in native-only mode, render time without WebView and return early
+        if (useNativeOnly) {
+            Log.d(TAG, "Native-only mode enabled, skipping WebView");
+            writeDiagnostic("onUpdate: native-only mode active, updating time display");
+            
+            // Calculate render size if needed
+            DisplayMetrics dm = context.getResources().getDisplayMetrics();
+            if (appWidgetIds.length > 0) {
+                android.os.Bundle options = appWidgetManager.getAppWidgetOptions(appWidgetIds[0]);
+                int minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH);
+                int minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT);
+                int maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH);
+                int maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT);
+                updateRenderDimensions(context, minWidth, minHeight, maxWidth, maxHeight);
+            } else {
+                renderWidth = Math.max((int)(BASE_WIDTH_DP * dm.density), BASE_WIDTH_DP);
+                renderHeight = Math.max((int)(BASE_HEIGHT_DP * dm.density), BASE_HEIGHT_DP);
+            }
+            
+            // Update native time view immediately
+            updateAllNativeViews(context, appWidgetManager, appWidgetIds);
+            
+            // Schedule periodic native updates
+            scheduleNativeUpdates(context);
+            return;
+        }
         
         // Calculate render size based on widget options if available
         DisplayMetrics dm = context.getResources().getDisplayMetrics();
@@ -161,6 +207,14 @@ public class NervClockWidget extends AppWidgetProvider {
         for (int appWidgetId : appWidgetIds) {
             setupInitialView(context, appWidgetManager, appWidgetId);
         }
+
+        // Also update a fast, native-rendered time view so the widget is useful
+        // even if WebView creation fails or is delayed.
+        try {
+            updateStaticTimeView(context, appWidgetManager, appWidgetIds);
+        } catch (Exception e) {
+            Log.w(TAG, "updateStaticTimeView failed: " + e.getMessage());
+        }
         
         // Check if app was reinstalled by comparing update times
         long currentUpdateTime = getAppUpdateTime(context);
@@ -171,20 +225,133 @@ public class NervClockWidget extends AppWidgetProvider {
             Log.d(TAG, "App reinstall detected, forcing WebView recreation");
             stopUpdates();
             retryCount = 0; // Reset retry count on reinstall
+            consecutiveFailures = 0; // Reset consecutive failures on reinstall
         }
         
         // Schedule periodic alarm to keep widget alive
         scheduleAlarm(context);
         
-        // Start WebView with a small delay to ensure everything is initialized
+        // Start WebView immediately
         final Context ctx = appContext;
-        getHandler().postDelayed(new Runnable() {
+        getHandler().post(new Runnable() {
             @Override
             public void run() {
                 startWebViewUpdates(ctx);
             }
-        }, WEBVIEW_INIT_DELAY);
+        });
     }
+
+    /**
+     * Render a simple time bitmap and update widgets immediately without WebView.
+     */
+    private static void updateStaticTimeView(Context context, AppWidgetManager mgr, int[] ids) {
+        if (context == null || ids == null || ids.length == 0) return;
+        try {
+            Bitmap bmp = createTimeBitmap();
+            if (bmp == null) return;
+            for (int id : ids) {
+                RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_webview);
+                views.setImageViewBitmap(R.id.widget_image, bmp);
+                views.setOnClickPendingIntent(R.id.btn_stop, getPendingIntentStatic(context, ACTION_STOP, id));
+                views.setOnClickPendingIntent(R.id.btn_slow, getPendingIntentStatic(context, ACTION_SLOW, id));
+                views.setOnClickPendingIntent(R.id.btn_normal, getPendingIntentStatic(context, ACTION_NORMAL, id));
+                views.setOnClickPendingIntent(R.id.btn_racing, getPendingIntentStatic(context, ACTION_RACING, id));
+                mgr.updateAppWidget(id, views);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "updateStaticTimeView exception: " + e.getMessage());
+        }
+    }
+
+    private static Bitmap createTimeBitmap() {
+        try {
+            int width = Math.max(renderWidth, BASE_WIDTH_DP);
+            int height = Math.max(renderHeight, BASE_HEIGHT_DP);
+            Bitmap bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(bmp);
+            canvas.drawColor(Color.parseColor("#0d0900"));
+            android.graphics.Paint paint = new android.graphics.Paint();
+            paint.setAntiAlias(true);
+            paint.setColor(Color.WHITE);
+            paint.setTextAlign(android.graphics.Paint.Align.CENTER);
+            paint.setTextSize(height / 2);
+            String time = new SimpleDateFormat("HH:mm").format(new Date());
+            canvas.drawText(time, width / 2, height / 2 + (height / 6), paint);
+            paint.setTextSize(height / 8);
+            paint.setColor(Color.parseColor("#FF6A00"));
+            canvas.drawText(new SimpleDateFormat("EEE dd").format(new Date()), width / 2, height - (height / 8), paint);
+            return bmp;
+        } catch (Exception e) {
+            Log.w(TAG, "createTimeBitmap failed: " + e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Update all widget instances with native time rendering.
+     * Used when in native-only mode or as fallback.
+     */
+    private static void updateAllNativeViews(Context context, AppWidgetManager mgr, int[] ids) {
+        if (context == null || ids == null || ids.length == 0) return;
+        try {
+            Bitmap bmp = createTimeBitmap();
+            if (bmp == null) return;
+            
+            for (int id : ids) {
+                RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_webview);
+                views.setImageViewBitmap(R.id.widget_image, bmp);
+                views.setOnClickPendingIntent(R.id.btn_stop, getPendingIntentStatic(context, ACTION_STOP, id));
+                views.setOnClickPendingIntent(R.id.btn_slow, getPendingIntentStatic(context, ACTION_SLOW, id));
+                views.setOnClickPendingIntent(R.id.btn_normal, getPendingIntentStatic(context, ACTION_NORMAL, id));
+                views.setOnClickPendingIntent(R.id.btn_racing, getPendingIntentStatic(context, ACTION_RACING, id));
+                mgr.updateAppWidget(id, views);
+            }
+            lastNativeUpdate = System.currentTimeMillis();
+        } catch (Exception e) {
+            Log.w(TAG, "updateAllNativeViews failed: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Schedule periodic native time updates when in native-only mode.
+     * Updates the time display every NATIVE_UPDATE_INTERVAL milliseconds.
+     */
+    private static void scheduleNativeUpdates(final Context context) {
+        if (context == null) return;
+        
+        Log.d(TAG, "Scheduling native updates every " + NATIVE_UPDATE_INTERVAL + "ms");
+        writeDiagnostic("Scheduling native time updates");
+        
+        getHandler().removeCallbacks(nativeUpdateRunnable);
+        getHandler().post(nativeUpdateRunnable);
+    }
+    
+    private static final Runnable nativeUpdateRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!useNativeOnly || appContext == null) {
+                Log.d(TAG, "Native update runnable: native-only mode disabled or app context null, stopping");
+                return;
+            }
+            
+            try {
+                long now = System.currentTimeMillis();
+                // Only update if enough time has passed to avoid excessive redraws
+                if (now - lastNativeUpdate >= NATIVE_UPDATE_INTERVAL) {
+                    Log.d(TAG, "Native time update triggered");
+                    // Get app widget IDs from AppWidgetManager
+                    AppWidgetManager mgr = AppWidgetManager.getInstance(appContext);
+                    int[] ids = mgr.getAppWidgetIds(new android.content.ComponentName(appContext, NervClockWidget.class));
+                    updateAllNativeViews(appContext, mgr, ids);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Native update runnable error: " + e.getMessage());
+            }
+            
+            // Schedule next update
+            getHandler().postDelayed(nativeUpdateRunnable, NATIVE_UPDATE_INTERVAL);
+        }
+    };
     
     /**
      * Setup initial view with placeholder and click handlers.
@@ -232,8 +399,8 @@ public class NervClockWidget extends AppWidgetProvider {
             Bitmap bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bmp);
             
-            // Fill with NERV dark background
-            canvas.drawColor(Color.parseColor("#0d0900"));
+            // Fill with white background for visibility
+            canvas.drawColor(Color.WHITE);
             
             android.graphics.Paint paint = new android.graphics.Paint();
             paint.setAntiAlias(true);
@@ -271,17 +438,16 @@ public class NervClockWidget extends AppWidgetProvider {
             paint.setStrokeWidth(4);
             canvas.drawRect(2, 2, width - 2, height - 2, paint);
             
-            // Draw Japanese text "初期化中" (Initializing)
+            // Draw text "NERV CLOCK LOADING..."
             paint.setStyle(android.graphics.Paint.Style.FILL);
-            paint.setColor(Color.parseColor("#FF6A00"));
-            paint.setTextSize(height / 5);
+            paint.setColor(Color.BLACK);
+            paint.setTextSize(height / 6);
             paint.setTextAlign(android.graphics.Paint.Align.CENTER);
-            canvas.drawText("初期化中", width / 2, height / 2 - height / 12, paint);
+            canvas.drawText("NERV CLOCK", width / 2, height / 2 - height / 8, paint);
             
-            // Draw English text "INITIALIZING..."
-            paint.setTextSize(height / 7);
-            paint.setColor(Color.parseColor("#FFCC00"));
-            canvas.drawText("INITIALIZING...", width / 2, height / 2 + height / 5, paint);
+            paint.setColor(Color.RED);
+            paint.setTextSize(height / 8);
+            canvas.drawText("LOADING...", width / 2, height / 2 + height / 6, paint);
             
             return bmp;
         } catch (Exception e) {
@@ -374,6 +540,8 @@ public class NervClockWidget extends AppWidgetProvider {
         }
         
         Log.d(TAG, "onReceive: " + action);
+        // Diagnostic toast to see receives without adb
+        try { android.widget.Toast.makeText(context, "NERV: received " + action, android.widget.Toast.LENGTH_SHORT).show(); } catch (Exception ignored) {}
         
         // Handle package replacement (app reinstall)
         if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
@@ -495,14 +663,24 @@ public class NervClockWidget extends AppWidgetProvider {
     }
 
     private static void startWebViewUpdates(final Context context) {
+        Log.d(TAG, "startWebViewUpdates called");
+        try { android.widget.Toast.makeText(context, "NERV: startWebViewUpdates", android.widget.Toast.LENGTH_SHORT).show(); } catch (Exception ignored) {}
+        writeDiagnostic("startWebViewUpdates called");
         if (context == null) {
             Log.e(TAG, "Context is null, cannot start WebView");
             return;
         }
         
         if (isUpdating && webView != null && pageLoaded) {
-            Log.d(TAG, "Already updating, skipping");
-            return;
+            long age = System.currentTimeMillis() - webViewCreationTime;
+            // If the existing WebView session is recent, skip creating another.
+            // If it's stale (> 60s) allow recreation to recover from stuck states.
+            if (age < 60000) {
+                Log.d(TAG, "Already updating, skipping (age=" + age + "ms)");
+                return;
+            } else {
+                Log.w(TAG, "Already updating but stale (age=" + age + "ms), forcing restart");
+            }
         }
         
         if (isCreatingWebView) {
@@ -528,7 +706,15 @@ public class NervClockWidget extends AppWidgetProvider {
                         renderHeight = BASE_HEIGHT_DP;
                     }
                     
-                    webView = new WebView(context.getApplicationContext());
+                    try {
+                        webView = new WebView(context.getApplicationContext());
+                        Log.d(TAG, "WebView created successfully");
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed to create WebView: " + e.getMessage());
+                        isCreatingWebView = false;
+                        retryWithBackoff(context);
+                        return;
+                    }
                     
                     webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
                     webView.setBackgroundColor(Color.parseColor("#0d0900"));
@@ -571,22 +757,97 @@ public class NervClockWidget extends AppWidgetProvider {
                         @Override
                         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                             Log.d(TAG, "Page started loading: " + url);
+                            writeDiagnostic("Page started: " + url);
                         }
                         
                         @Override
                         public void onPageFinished(WebView view, String url) {
-                            Log.d(TAG, "Page loaded!");
+                            Log.d(TAG, "Page loaded! URL=" + url);
+                            writeDiagnostic("Page loaded: " + url);
                             isCreatingWebView = false;
                             pageLoaded = true;
                             isUpdating = true;
                             retryCount = 0; // Reset retry count on success
+                            consecutiveFailures = 0; // Reset consecutive failure counter on success
                             showingError = false;
+                            // Quick test: sample center pixel after a short delay to see if WebView painted
+                            getHandler().postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    try {
+                                        if (webView == null) return;
+                                        // Force a render and sample
+                                        if (reusableBitmap == null) {
+                                            reusableBitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888);
+                                            reusableCanvas = new Canvas(reusableBitmap);
+                                            lastRenderWidth = renderWidth;
+                                            lastRenderHeight = renderHeight;
+                                        }
+                                        reusableBitmap.eraseColor(Color.TRANSPARENT);
+                                        webView.draw(reusableCanvas);
+                                        int cx = reusableBitmap.getWidth()/2;
+                                        int cy = reusableBitmap.getHeight()/2;
+                                        int pixel = reusableBitmap.getPixel(cx, cy);
+                                        Log.d(TAG, "Post-load sample pixel ARGB=" + Integer.toHexString(pixel));
+
+                                        // Evaluate HTML size and background via JS to diagnose blank renders
+                                        try {
+                                            webView.evaluateJavascript("(function(){try{return document.documentElement.outerHTML.length;}catch(e){return 'err:'+e.message;}})();", new android.webkit.ValueCallback<String>() {
+                                                @Override
+                                                public void onReceiveValue(String value) {
+                                                    Log.d(TAG, "JS outerHTML length: " + value);
+                                                }
+                                            });
+
+                                            webView.evaluateJavascript("(function(){try{return window.getComputedStyle(document.body).backgroundColor;}catch(e){return 'err:'+e.message;}})();", new android.webkit.ValueCallback<String>() {
+                                                @Override
+                                                public void onReceiveValue(String value) {
+                                                    Log.d(TAG, "JS body bg: " + value);
+                                                }
+                                            });
+
+                                            // If pixel was background (empty), try forcing a visible background color via JS
+                                            if (pixel == 0) {
+                                                Log.w(TAG, "Blank sample detected, forcing body background via JS");
+                                                webView.evaluateJavascript("(function(){try{document.body.style.backgroundColor='rgb(0,255,0)'; return 'ok';}catch(e){return 'err:'+e.message;}})();", new android.webkit.ValueCallback<String>() {
+                                                    @Override
+                                                    public void onReceiveValue(String value) {
+                                                        Log.d(TAG, "JS set bg result: " + value);
+                                                        // After forcing style, re-render and sample
+                                                        getHandler().postDelayed(new Runnable() {
+                                                            @Override
+                                                            public void run() {
+                                                                try {
+                                                                    if (reusableBitmap == null) return;
+                                                                    reusableBitmap.eraseColor(Color.TRANSPARENT);
+                                                                    webView.draw(reusableCanvas);
+                                                                    int nx = reusableBitmap.getWidth()/2;
+                                                                    int ny = reusableBitmap.getHeight()/2;
+                                                                    int npixel = reusableBitmap.getPixel(nx, ny);
+                                                                    Log.d(TAG, "Post-force sample pixel ARGB=" + Integer.toHexString(npixel));
+                                                                } catch (Exception ex) {
+                                                                    Log.e(TAG, "Post-force sample error: " + ex.getMessage());
+                                                                }
+                                                            }
+                                                        }, 200);
+                                                    }
+                                                });
+                                            }
+                                        } catch (Exception e) {
+                                            Log.e(TAG, "JS evaluation error: " + e.getMessage());
+                                        }
+                                    } catch (Exception e) {
+                                        Log.e(TAG, "Post-load sample error: " + e.getMessage());
+                                    }
+                                }
+                            }, 250);
                             scheduleUpdate(context);
                         }
                         
                         @Override
                         public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
                             Log.e(TAG, "WebView error: " + errorCode + " - " + description + " URL: " + failingUrl);
+                            writeDiagnostic("WebView error: code=" + errorCode + " desc=" + description + " url=" + failingUrl);
                             isCreatingWebView = false;
                             retryWithBackoff(context);
                         }
@@ -597,9 +858,32 @@ public class NervClockWidget extends AppWidgetProvider {
                     
                     // Clear cache and load fresh
                     webView.clearCache(true);
+                    // Use file URL first - more reliable for assets on many OEMs
                     String url = "file:///android_asset/widget.html?t=" + System.currentTimeMillis();
                     Log.d(TAG, "Loading URL: " + url);
-                    webView.loadUrl(url);
+                    try {
+                        webView.loadUrl(url);
+                    } catch (Exception e) {
+                        Log.w(TAG, "loadUrl failed, trying loadDataWithBaseURL: " + e.getMessage());
+                        try {
+                            java.io.InputStream is = context.getAssets().open("widget.html");
+                            java.util.Scanner s = new java.util.Scanner(is, "UTF-8").useDelimiter("\\A");
+                            String html = s.hasNext() ? s.next() : "";
+                            is.close();
+                            webView.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "utf-8", null);
+                        } catch (Exception ex) {
+                            Log.e(TAG, "Both loadUrl and loadDataWithBaseURL failed: " + ex.getMessage());
+                        }
+                    }
+
+                    // Ensure timers and JS can run
+                    try {
+                        webView.onResume();
+                        webView.resumeTimers();
+                    } catch (Exception ignored) {}
+
+                    // Start a simple progress monitor to help diagnose stuck loads
+                    startProgressMonitor();
                     
                 } catch (Exception e) {
                     Log.e(TAG, "Error creating WebView: " + e.getMessage());
@@ -620,6 +904,7 @@ public class NervClockWidget extends AppWidgetProvider {
             public void run() {
                 if (!pageLoaded && isCreatingWebView) {
                     Log.w(TAG, "Page load timeout, retrying...");
+                    writeDiagnostic("Page load timeout");
                     isCreatingWebView = false;
                     retryWithBackoff(context);
                 }
@@ -628,9 +913,54 @@ public class NervClockWidget extends AppWidgetProvider {
     }
     
     /**
+     * Start a simple progress monitor to log WebView.getProgress() periodically.
+     */
+    private static void startProgressMonitor() {
+        final int[] attempts = new int[]{0};
+        getHandler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (webView == null) return;
+                    int progress = 0;
+                    try { progress = webView.getProgress(); } catch (Exception ignored) {}
+                    Log.d(TAG, "WebView progress: " + progress + " (pageLoaded=" + pageLoaded + ", isCreating=" + isCreatingWebView + ")");
+                    attempts[0]++;
+                    // Monitor for up to 12 seconds while creating
+                    if (!pageLoaded && attempts[0] < 12 && isCreatingWebView) {
+                        getHandler().postDelayed(this, 1000);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Progress monitor error: " + e.getMessage());
+                }
+            }
+        }, 1000);
+    }
+    
+    /**
      * Retry WebView creation with exponential backoff.
      */
     private static void retryWithBackoff(final Context context) {
+        // Increment consecutive failure counter
+        consecutiveFailures++;
+        Log.d(TAG, "Consecutive WebView failures: " + consecutiveFailures + "/" + CONSECUTIVE_FAILURES_THRESHOLD);
+        
+        // Check if we've exceeded the failure threshold - if so, switch to native-only mode
+        if (consecutiveFailures >= CONSECUTIVE_FAILURES_THRESHOLD) {
+            Log.e(TAG, "Consecutive failures threshold (" + CONSECUTIVE_FAILURES_THRESHOLD + ") reached, switching to native-only mode");
+            writeDiagnostic("Switching to native-only mode after " + consecutiveFailures + " consecutive WebView failures");
+            
+            // Activate native-only mode
+            useNativeOnly = true;
+            android.content.SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            prefs.edit().putBoolean(PREF_USE_NATIVE_ONLY, true).commit();
+            
+            // Stop WebView updates and start native updates
+            stopUpdates();
+            scheduleNativeUpdates(context);
+            return;
+        }
+        
         if (retryCount >= MAX_RETRY_COUNT) {
             Log.e(TAG, "Max retries reached, showing error and scheduling retry in " + RETRY_RESET_DELAY + "ms");
             
@@ -653,12 +983,14 @@ public class NervClockWidget extends AppWidgetProvider {
         retryCount++;
         int delay = 1000 * retryCount; // 1s, 2s, 3s
         Log.d(TAG, "Retrying in " + delay + "ms (attempt " + retryCount + "/" + MAX_RETRY_COUNT + ")");
+        writeDiagnostic("Retrying in " + delay + "ms (attempt " + retryCount + "/" + MAX_RETRY_COUNT + ")");
         
         stopUpdates();
         
         getHandler().postDelayed(new Runnable() {
             @Override
             public void run() {
+                writeDiagnostic("retry timer fired, starting WebViewUpdates");
                 startWebViewUpdates(context);
             }
         }, delay);
@@ -812,6 +1144,10 @@ public class NervClockWidget extends AppWidgetProvider {
             
             // Check if bitmap is empty/transparent (WebView failed to render)
             if (isBitmapEmpty(bmp)) {
+                int cx = bmp.getWidth()/2;
+                int cy = bmp.getHeight()/2;
+                int centerPixel = bmp.getPixel(cx, cy);
+                Log.w(TAG, "Empty bitmap detected - center pixel ARGB=" + Integer.toHexString(centerPixel));
                 long timeSinceCreation = System.currentTimeMillis() - webViewCreationTime;
                 // Give WebView some time to render before considering it failed
                 if (timeSinceCreation > 3000) { // 3 seconds grace period
@@ -866,6 +1202,7 @@ public class NervClockWidget extends AppWidgetProvider {
         isUpdating = false;
         pageLoaded = false;
         isCreatingWebView = false;
+        writeDiagnostic("stopUpdates");
         
         // Remove all callbacks
         if (handler != null) {
@@ -896,6 +1233,38 @@ public class NervClockWidget extends AppWidgetProvider {
                     }
                 }
             });
+        }
+    }
+
+    private static void writeDiagnostic(String msg) {
+        try {
+            if (appContext == null) return;
+            File dir = appContext.getFilesDir();
+            if (dir == null) return;
+            File f = new File(dir, "nerv_debug.log");
+            FileOutputStream fos = new FileOutputStream(f, true);
+            BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(fos, "UTF-8"));
+            String ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+            bw.write(ts + " - " + msg + "\n");
+            bw.flush();
+            bw.close();
+            // Also write to external files dir so we can pull without run-as
+            try {
+                File ext = appContext.getExternalFilesDir(null);
+                if (ext != null) {
+                    File ef = new File(ext, "nerv_debug_ext.log");
+                    FileOutputStream efos = new FileOutputStream(ef, true);
+                    BufferedWriter ebw = new BufferedWriter(new OutputStreamWriter(efos, "UTF-8"));
+                    ebw.write(ts + " - " + msg + "\n");
+                    ebw.flush();
+                    ebw.close();
+                }
+            } catch (Exception eex) {
+                Log.w(TAG, "external writeDiagnostic failed: " + eex.getMessage());
+            }
+        } catch (Exception e) {
+            // Don't spam logs if diagnostics fail
+            Log.w(TAG, "writeDiagnostic failed: " + e.getMessage());
         }
     }
 }

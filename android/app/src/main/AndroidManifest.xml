@@ -50,6 +50,17 @@
                 android:resource="@xml/widget_info" />
         </receiver>
 
+        <!-- Main Activity (required by some OEMs for widget picker) -->
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.NervClock">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <!-- Boot Receiver to restart widget after device reboot -->
         <receiver
             android:name=".BootReceiver"
@@ -65,16 +76,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- Screen State Receiver to restart widget when screen turns on -->
-        <receiver
-            android:name=".ScreenReceiver"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.SCREEN_ON" />
-                <action android:name="android.intent.action.USER_PRESENT" />
-            </intent-filter>
-        </receiver>
 
     </application>
 </manifest>
