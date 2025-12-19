@@ -435,15 +435,18 @@ public class NervClockWidget extends AppWidgetProvider {
                     int scaledImageWidth = (int)(currentWidth * scale);
                     int scaledImageHeight = (int)(currentHeight * scale);
                     
-                    // Control bar ratios from ClockViewRenderer (relative to WIDTH)
+                    // Control bar ratios from ClockViewRenderer (relative to baseUnit)
+                    // baseUnit = min(width, height * 3) in ClockViewRenderer
+                    float baseUnit = Math.min(currentWidth, currentHeight * 3.0f);
                     float controlBarHeightRatio = 0.05f;
                     float bottomMarginRatio = 0.01f;
                     float sideMarginRatio = 0.02f;
                     
-                    // Calculate in scaled coordinates
-                    int scaledControlBarHeight = (int)(scaledImageWidth * controlBarHeightRatio);
-                    int scaledBottomMargin = (int)(scaledImageWidth * bottomMarginRatio);
-                    int scaledSideMargin = (int)(scaledImageWidth * sideMarginRatio);
+                    // Calculate in scaled coordinates using baseUnit ratio
+                    float scaledBaseUnit = baseUnit * scale;
+                    int scaledControlBarHeight = (int)(scaledBaseUnit * controlBarHeightRatio);
+                    int scaledBottomMargin = (int)(scaledBaseUnit * bottomMarginRatio);
+                    int scaledSideMargin = (int)(scaledBaseUnit * sideMarginRatio);
                     
                     // Offset from container edges to centered image
                     int imageVerticalOffset = (widgetContainerHeight - scaledImageHeight) / 2;
@@ -479,6 +482,8 @@ public class NervClockWidget extends AppWidgetProvider {
                         buttonSideMargin,
                         android.util.TypedValue.COMPLEX_UNIT_PX);
                 }
+                // For Android 11 (API 30), button positioning uses fixed layout from XML
+                // The clock content scales properly via ClockViewRenderer.drawClock()
                 
                 // Set up click handlers for buttons
                 views.setOnClickPendingIntent(R.id.btn_stop, createPendingIntent(context, ACTION_STOP, 1));
