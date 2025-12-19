@@ -60,6 +60,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Java Clock Activity (Pure Java UI without WebView) -->
+        <activity
+            android:name=".NervClockActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="portrait"
+            android:hardwareAccelerated="true">
+        </activity>
+
         <!-- Boot Receiver to restart widget after device reboot -->
         <receiver
             android:name=".BootReceiver"
