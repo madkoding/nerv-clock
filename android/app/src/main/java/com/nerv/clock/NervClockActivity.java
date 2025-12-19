@@ -1,14 +1,14 @@
 package com.nerv.clock;
 
+import android.app.Activity;
 import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
 import com.nerv.clock.ui.ClockView;
 
 /**
  * Main NERV Clock Activity
  * Displays the digital clock interface in full-screen mode
  */
-public class NervClockActivity extends AppCompatActivity {
+public class NervClockActivity extends Activity {
     
     private ClockView clockView;
     

@@ -679,13 +679,13 @@ public class ClockView extends View implements ClockLogic.OnClockUpdateListener 
     }
     
     public void startUpdates() {
-        if (getHandler() == null) return;
-        getHandler().post(updateRunnable);
+        if (getUpdateHandler() == null) return;
+        getUpdateHandler().post(updateRunnable);
     }
     
     public void stopUpdates() {
-        if (getHandler() != null) {
-            getHandler().removeCallbacks(updateRunnable);
+        if (getUpdateHandler() != null) {
+            getUpdateHandler().removeCallbacks(updateRunnable);
         }
     }
     
@@ -758,7 +758,7 @@ public class ClockView extends View implements ClockLogic.OnClockUpdateListener 
         return clockLogic;
     }
     
-    private android.os.Handler getHandler() {
+    private android.os.Handler getUpdateHandler() {
         return new android.os.Handler(android.os.Looper.getMainLooper());
     }
 }
