@@ -116,17 +116,21 @@ public class ClockViewRenderer {
     
     /**
      * Draw the complete clock to canvas
-     * All sizes relative to WIDTH for consistent scaling
+     * Sizes scale based on both width and height to fit the container
      */
     public void drawClock(Canvas canvas, int width, int height) {
         // Update clock state
         clockLogic.update();
         updateWarningState();
         
-        // BASE UNIT = width (all sizes relative to this)
-        float baseUnit = width;
+        // Calculate base unit considering both dimensions
+        // Use the smaller of: width or height scaled to typical aspect ratio (3:1)
+        // This ensures content fits when either dimension is reduced
+        float widthBasedUnit = width;
+        float heightBasedUnit = height * 3.0f;  // Scale height to equivalent width (assuming ~3:1 aspect)
+        float baseUnit = Math.min(widthBasedUnit, heightBasedUnit);
         
-        // Layout constants (relative to width)
+        // Layout constants (relative to baseUnit)
         float sideMargin = baseUnit * 0.02f;
         float topBarHeight = baseUnit * 0.06f;
         float controlBarHeight = baseUnit * 0.05f;
