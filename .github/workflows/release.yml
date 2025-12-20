@@ -2,6 +2,8 @@ name: Build and Release
 
 on:
   push:
+    branches:
+      - '**'
     tags:
       - 'v*'
   workflow_dispatch:
@@ -28,15 +30,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Get version from tag
+      - name: Get version
         id: version
         shell: bash
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF_NAME#v}
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
-      - name: Update version in files
+      - name: Update version in files (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
@@ -96,10 +103,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Get version from tag
+      - name: Get version
         id: version
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF_NAME#v}
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
