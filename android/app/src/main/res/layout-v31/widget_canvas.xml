@@ -9,14 +9,14 @@
         android:id="@+id/widget_image"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:scaleType="centerInside"
+        android:scaleType="fitCenter"
         android:contentDescription="NERV Clock" />
 
     <LinearLayout
         android:id="@+id/button_container"
         android:layout_width="match_parent"
         android:layout_height="60dp"
-        android:layout_alignParentBottom="true"
+        android:layout_alignParentTop="true"
         android:orientation="horizontal">
 
         <TextView

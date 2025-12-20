@@ -51,6 +51,10 @@ public class NervClockWidget extends AppWidgetProvider {
     private static int widgetContainerWidth = 400;
     private static int widgetContainerHeight = 150;
     
+    // Actual bitmap dimensions (may differ from container)
+    private static int bitmapWidth = 400;
+    private static int bitmapHeight = 150;
+    
     private static synchronized Handler getHandler() {
         if (handler == null) {
             handler = new Handler(Looper.getMainLooper());
@@ -427,50 +431,56 @@ public class NervClockWidget extends AppWidgetProvider {
                 
                 // Calculate button positioning for API 31+ with centerInside scaling
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    // With centerInside, the image is scaled to fit and centered
-                    float scaleX = (float) widgetContainerWidth / currentWidth;
-                    float scaleY = (float) widgetContainerHeight / currentHeight;
-                    float scale = Math.min(scaleX, scaleY);
+                    // Match the EXACT calculation from ClockViewRenderer:
+                    // baseUnit = min(width, height * 3)
+                    // controlBarHeight = baseUnit * 0.05
+                    // bottomMargin = baseUnit * 0.01
+                    // sideMargin = baseUnit * 0.02
+                    // controlBarTop = height - controlBarHeight - bottomMargin
+                    // buttonHeight = controlBarHeight * 0.85
+                    // buttonTop = controlBarTop + (controlBarHeight - buttonHeight) / 2
                     
-                    int scaledImageWidth = (int)(currentWidth * scale);
-                    int scaledImageHeight = (int)(currentHeight * scale);
+                    float baseUnit = Math.min(widgetContainerWidth, widgetContainerHeight * 3.0f);
+                    float controlBarHeight = baseUnit * 0.05f;
+                    float bottomMargin = baseUnit * 0.01f;
+                    float sideMargin = baseUnit * 0.02f;
                     
-                    // Control bar ratios from ClockViewRenderer (relative to baseUnit)
-                    // baseUnit = min(width, height * 3) in ClockViewRenderer
-                    float baseUnit = Math.min(currentWidth, currentHeight * 3.0f);
-                    float controlBarHeightRatio = 0.05f;
-                    float bottomMarginRatio = 0.01f;
-                    float sideMarginRatio = 0.02f;
+                    // Control bar position
+                    float controlBarTop = widgetContainerHeight - controlBarHeight - bottomMargin;
                     
-                    // Calculate in scaled coordinates using baseUnit ratio
-                    float scaledBaseUnit = baseUnit * scale;
-                    int scaledControlBarHeight = (int)(scaledBaseUnit * controlBarHeightRatio);
-                    int scaledBottomMargin = (int)(scaledBaseUnit * bottomMarginRatio);
-                    int scaledSideMargin = (int)(scaledBaseUnit * sideMarginRatio);
+                    // Actual button position within control bar (centered, 85% height)
+                    float actualButtonHeight = controlBarHeight * 0.85f;
+                    float actualButtonTop = controlBarTop + (controlBarHeight - actualButtonHeight) / 2;
                     
-                    // Offset from container edges to centered image
-                    int imageVerticalOffset = (widgetContainerHeight - scaledImageHeight) / 2;
-                    int imageHorizontalOffset = (widgetContainerWidth - scaledImageWidth) / 2;
+                    // Adjustment: the offset needed depends on widget aspect ratio
+                    // When widget is tall (aspect < 3), we need more offset
+                    // When widget is wide (aspect >= 3), we need less offset
+                    float aspectRatio = (float) widgetContainerWidth / widgetContainerHeight;
+                    float idealAspect = 3.0f;
                     
-                    // Android 12+ widget container has extra space below the visible image
-                    // for system UI and rounded corners. This extra space is significant.
-                    // Approximately 17% of container height based on visual calibration
-                    int extraBottomSpace = (int)(widgetContainerHeight * 0.17f);
+                    // Scale the adjustment based on how far we are from ideal aspect
+                    float adjustmentFactor;
+                    if (aspectRatio >= idealAspect) {
+                        // Wide widget - use base adjustment
+                        adjustmentFactor = 1.35f;
+                    } else {
+                        // Tall widget - increase adjustment (inverse proportion)
+                        adjustmentFactor = 1.35f * (idealAspect / aspectRatio);
+                    }
                     
-                    // Total bottom margin = image offset + internal margin + extra space
-                    int buttonBottomMargin = imageVerticalOffset + scaledBottomMargin + extraBottomSpace;
-                    int buttonSideMargin = imageHorizontalOffset + scaledSideMargin;
+                    int buttonTopMargin = (int) (actualButtonTop - controlBarHeight * adjustmentFactor);
+                    int buttonHeight = (int) actualButtonHeight;
+                    int buttonSideMargin = (int) sideMargin;
                     
                     Log.d(TAG, "Button calc: container=" + widgetContainerWidth + "x" + widgetContainerHeight + 
-                          ", scaled=" + scaledImageWidth + "x" + scaledImageHeight +
-                          ", vOffset=" + imageVerticalOffset + ", extraBottom=" + extraBottomSpace +
-                          ", bottomM=" + buttonBottomMargin);
+                          ", baseUnit=" + baseUnit + ", ctrlBarTop=" + controlBarTop +
+                          ", topM=" + buttonTopMargin + ", btnH=" + buttonHeight);
                     
-                    views.setViewLayoutHeight(R.id.button_container, scaledControlBarHeight, android.util.TypedValue.COMPLEX_UNIT_PX);
+                    views.setViewLayoutHeight(R.id.button_container, buttonHeight, android.util.TypedValue.COMPLEX_UNIT_PX);
                     
                     views.setViewLayoutMargin(R.id.button_container, 
-                        android.widget.RemoteViews.MARGIN_BOTTOM, 
-                        buttonBottomMargin, 
+                        android.widget.RemoteViews.MARGIN_TOP, 
+                        buttonTopMargin, 
                         android.util.TypedValue.COMPLEX_UNIT_PX);
                     
                     views.setViewLayoutMargin(R.id.button_container,
@@ -502,30 +512,26 @@ public class NervClockWidget extends AppWidgetProvider {
         try {
             if (currentWidth <= 0 || currentHeight <= 0) return null;
             
-            // Calculate the actual bitmap size based on content aspect ratio
-            // The clock content has a natural aspect ratio of ~3:1 (width:height)
-            // We need to create a bitmap that matches what the content will fill
-            int bitmapWidth, bitmapHeight;
+            // Use the full container size - no aspect ratio restriction
+            // The renderer will handle proper scaling internally
+            bitmapWidth = currentWidth;
+            bitmapHeight = currentHeight;
             
-            float contentAspectRatio = 3.0f; // Clock's natural aspect ratio
-            float containerAspectRatio = (float) currentWidth / currentHeight;
-            
-            if (containerAspectRatio > contentAspectRatio) {
-                // Container is wider than content - height is the constraint
-                bitmapHeight = currentHeight;
-                bitmapWidth = (int)(currentHeight * contentAspectRatio);
-            } else {
-                // Container is taller than content - width is the constraint
-                bitmapWidth = currentWidth;
-                bitmapHeight = (int)(currentWidth / contentAspectRatio);
+            // Limit maximum bitmap size to avoid RemoteViews 1MB limit
+            // Max ~800KB for ARGB_8888 = ~200,000 pixels = ~600x333 or similar
+            int maxPixels = 500000; // Safe limit
+            int currentPixels = bitmapWidth * bitmapHeight;
+            if (currentPixels > maxPixels) {
+                float scale = (float) Math.sqrt((float) maxPixels / currentPixels);
+                bitmapWidth = (int)(bitmapWidth * scale);
+                bitmapHeight = (int)(bitmapHeight * scale);
             }
             
             // Ensure minimum size
             bitmapWidth = Math.max(bitmapWidth, 100);
             bitmapHeight = Math.max(bitmapHeight, 50);
             
-            Log.d(TAG, "Bitmap size: " + bitmapWidth + "x" + bitmapHeight + 
-                  " (container: " + currentWidth + "x" + currentHeight + ")");
+            Log.d(TAG, "Bitmap size: " + bitmapWidth + "x" + bitmapHeight + " (container: " + currentWidth + "x" + currentHeight + ")");
             
             Bitmap bitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888);
             android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
