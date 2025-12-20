@@ -8,8 +8,16 @@
         android:id="@+id/widget_image"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:scaleType="fitXY"
+        android:scaleType="fitCenter"
         android:contentDescription="NERV Clock" />
+
+    <!-- Title button for color theme change (over NERV CHRONOMETER text) -->
+    <TextView
+        android:id="@+id/btn_title"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true" />
 
     <LinearLayout
         android:id="@+id/button_container"

@@ -73,45 +73,50 @@ public class ClockViewRenderer {
     private void initializePaints() {
         // Digit paint (7-segment style)
         digitPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        digitPaint.setColor(ColorScheme.NERV_ORANGE);
+        digitPaint.setColor(ColorScheme.getPrimaryColor());
         digitPaint.setTypeface(FontManager.getDSEG7());
         digitPaint.setTextAlign(Paint.Align.CENTER);
         
         // Colon paint
         colonPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        colonPaint.setColor(ColorScheme.NERV_ORANGE);
+        colonPaint.setColor(ColorScheme.getPrimaryColor());
         colonPaint.setTypeface(FontManager.getDSEG7());
         colonPaint.setTextAlign(Paint.Align.CENTER);
         
         // Segment OFF paint
         segmentOffPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        segmentOffPaint.setColor(ColorScheme.SEGMENT_OFF);
+        segmentOffPaint.setColor(ColorScheme.getDimColor());
         segmentOffPaint.setTypeface(FontManager.getDSEG7());
         segmentOffPaint.setTextAlign(Paint.Align.CENTER);
         
         // Regular text paint
         textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        textPaint.setColor(ColorScheme.NERV_ORANGE);
+        textPaint.setColor(ColorScheme.getPrimaryColor());
         textPaint.setTypeface(FontManager.getNimbusSansRegular());
         textPaint.setTextAlign(Paint.Align.CENTER);
         
         // Label paint (bold)
         labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        labelPaint.setColor(ColorScheme.NERV_ORANGE);
+        labelPaint.setColor(ColorScheme.getPrimaryColor());
         labelPaint.setTypeface(FontManager.getNimbusSansBold());
         labelPaint.setTextAlign(Paint.Align.CENTER);
         
         // Small text paint
         smallTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        smallTextPaint.setColor(ColorScheme.NERV_ORANGE);
+        smallTextPaint.setColor(ColorScheme.getPrimaryColor());
         smallTextPaint.setTypeface(FontManager.getNimbusSansRegular());
         smallTextPaint.setTextAlign(Paint.Align.CENTER);
         
         // Border paint
         borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        borderPaint.setColor(ColorScheme.BORDER_COLOR);
+        borderPaint.setColor(ColorScheme.getBorderColor());
         borderPaint.setStrokeWidth(2);
         borderPaint.setStyle(Paint.Style.STROKE);
+    }
+    
+    // Re-initialize paints when theme changes
+    public void updateThemeColors() {
+        initializePaints();
     }
     
     /**
@@ -127,7 +132,7 @@ public class ClockViewRenderer {
         // Use the smaller of: width or height scaled to typical aspect ratio (3:1)
         // This ensures content fits when either dimension is reduced
         float widthBasedUnit = width;
-        float heightBasedUnit = height * 3.0f;  // Scale height to equivalent width (assuming ~3:1 aspect)
+        float heightBasedUnit = height * 3.0f;
         float baseUnit = Math.min(widthBasedUnit, heightBasedUnit);
         
         // Layout constants (relative to baseUnit)
@@ -255,7 +260,7 @@ public class ClockViewRenderer {
         Paint jpPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         jpPaint.setTypeface(FontManager.getNimbusSansRegular());
         jpPaint.setTextSize(jpTextSize);
-        jpPaint.setColor(ColorScheme.NERV_ORANGE);
+        jpPaint.setColor(ColorScheme.getPrimaryColor());
         jpPaint.setTextAlign(Paint.Align.LEFT);
         Paint.FontMetrics jpFm = jpPaint.getFontMetrics();
         float jpTextY = topBarCenterY + (jpFm.descent - jpFm.ascent) / 2 - jpFm.descent;
@@ -265,7 +270,7 @@ public class ClockViewRenderer {
         Paint chronoPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         chronoPaint.setTypeface(FontManager.getNimbusSansBold());
         chronoPaint.setTextSize(labelSize);
-        chronoPaint.setColor(ColorScheme.NERV_ORANGE);
+        chronoPaint.setColor(ColorScheme.getPrimaryColor());
         chronoPaint.setTextAlign(Paint.Align.CENTER);
         Paint.FontMetrics chronoFm = chronoPaint.getFontMetrics();
         float chronoTextY = topBarCenterY + (chronoFm.descent - chronoFm.ascent) / 2 - chronoFm.descent;
@@ -302,7 +307,7 @@ public class ClockViewRenderer {
         
         // Color depends on charging state
         int stripeColor = isCharging ? ColorScheme.NERV_GREEN : ColorScheme.NERV_RED;
-        int textColor = isCharging ? ColorScheme.NERV_GREEN : ColorScheme.NERV_ORANGE;
+        int textColor = isCharging ? ColorScheme.NERV_GREEN : ColorScheme.getPrimaryColor();
         String kanjiText = isCharging ? "外部" : "内部";
         String labelText = isCharging ? "EXTERNAL" : "INTERNAL";
         
@@ -401,7 +406,7 @@ public class ClockViewRenderer {
         }
         
         // Set digit color based on warning state
-        int digitColor = ColorScheme.NERV_ORANGE;
+        int digitColor = ColorScheme.getPrimaryColor();
         switch (currentWarningState) {
             case WARNING:
                 digitColor = ColorScheme.WARNING_YELLOW;
@@ -722,7 +727,7 @@ public class ClockViewRenderer {
         float cornerSize = baseUnit * 0.02f;  // Half the original size (was 0.04f)
         float cornerMargin = sideMargin * 0.3f;  // Corners closer to edge
         Paint cornerPaint = new Paint();
-        cornerPaint.setColor(ColorScheme.NERV_ORANGE);
+        cornerPaint.setColor(ColorScheme.getPrimaryColor());
         cornerPaint.setStyle(Paint.Style.STROKE);
         cornerPaint.setStrokeWidth(2);
         

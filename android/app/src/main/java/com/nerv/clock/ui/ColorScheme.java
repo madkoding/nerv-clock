@@ -5,10 +5,91 @@ import android.graphics.Color;
 /**
  * NERV Chronometer color scheme
  * Defines all colors used in the digital clock display
+ * Supports multiple color themes
  */
 public class ColorScheme {
     
-    // NERV Official Colors
+    // Theme names
+    public static final String[] THEME_NAMES = {
+        "orange", "cyan", "green", "purple", "pink", "yellow", "red", "white"
+    };
+    
+    // Current theme index (0 = orange/default)
+    private static int currentThemeIndex = 0;
+    
+    // Theme primary colors
+    private static final int[] THEME_PRIMARY_COLORS = {
+        Color.parseColor("#FF6A00"),  // Orange (default)
+        Color.parseColor("#00CCFF"),  // Cyan
+        Color.parseColor("#00FF00"),  // Green
+        Color.parseColor("#AA00FF"),  // Purple
+        Color.parseColor("#FF69B4"),  // Pink
+        Color.parseColor("#FFFF00"),  // Yellow
+        Color.parseColor("#FF0000"),  // Red
+        Color.parseColor("#FFFFFF"),  // White
+    };
+    
+    // Theme dim colors (for off segments)
+    private static final int[] THEME_DIM_COLORS = {
+        Color.parseColor("#260D00"),  // Orange dim
+        Color.parseColor("#002233"),  // Cyan dim
+        Color.parseColor("#003300"),  // Green dim
+        Color.parseColor("#1A0033"),  // Purple dim
+        Color.parseColor("#331122"),  // Pink dim
+        Color.parseColor("#333300"),  // Yellow dim
+        Color.parseColor("#330000"),  // Red dim
+        Color.parseColor("#333333"),  // White dim
+    };
+    
+    // Theme border colors
+    private static final int[] THEME_BORDER_COLORS = {
+        Color.parseColor("#FF6A00"),  // Orange
+        Color.parseColor("#00CCFF"),  // Cyan
+        Color.parseColor("#00FF00"),  // Green
+        Color.parseColor("#AA00FF"),  // Purple
+        Color.parseColor("#FF69B4"),  // Pink
+        Color.parseColor("#FFFF00"),  // Yellow
+        Color.parseColor("#FF0000"),  // Red
+        Color.parseColor("#FFFFFF"),  // White
+    };
+    
+    // Set current theme
+    public static void setTheme(int themeIndex) {
+        if (themeIndex >= 0 && themeIndex < THEME_PRIMARY_COLORS.length) {
+            currentThemeIndex = themeIndex;
+        }
+    }
+    
+    // Get current theme index
+    public static int getThemeIndex() {
+        return currentThemeIndex;
+    }
+    
+    // Cycle to next theme
+    public static int nextTheme() {
+        currentThemeIndex = (currentThemeIndex + 1) % THEME_PRIMARY_COLORS.length;
+        return currentThemeIndex;
+    }
+    
+    // Get theme name
+    public static String getThemeName() {
+        return THEME_NAMES[currentThemeIndex];
+    }
+    
+    // Dynamic colors based on current theme
+    public static int getPrimaryColor() {
+        return THEME_PRIMARY_COLORS[currentThemeIndex];
+    }
+    
+    public static int getDimColor() {
+        return THEME_DIM_COLORS[currentThemeIndex];
+    }
+    
+    public static int getBorderColor() {
+        return THEME_BORDER_COLORS[currentThemeIndex];
+    }
+    
+    // NERV Official Colors (legacy - still used for some elements)
     public static final int NERV_ORANGE = Color.parseColor("#FF6A00");
     public static final int NERV_ORANGE_BRIGHT = Color.parseColor("#FF8C00");
     public static final int NERV_ORANGE_DIM = Color.parseColor("#260D00"); // ~15% opacity version

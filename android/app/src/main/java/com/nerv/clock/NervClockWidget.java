@@ -8,6 +8,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.os.BatteryManager;
 import android.os.Build;
@@ -19,6 +20,7 @@ import android.util.Log;
 import android.widget.RemoteViews;
 
 import com.nerv.clock.ui.ClockViewRenderer;
+import com.nerv.clock.ui.ColorScheme;
 import com.nerv.clock.ui.FontManager;
 
 /**
@@ -33,6 +35,9 @@ public class NervClockWidget extends AppWidgetProvider {
     private static final String ACTION_SLOW = "com.nerv.clock.ACTION_SLOW";
     private static final String ACTION_NORMAL = "com.nerv.clock.ACTION_NORMAL";
     private static final String ACTION_RACING = "com.nerv.clock.ACTION_RACING";
+    private static final String ACTION_THEME = "com.nerv.clock.ACTION_THEME";
+    private static final String PREFS_NAME = "NervClockPrefs";
+    private static final String PREF_THEME_INDEX = "theme_index";
     private static final long UPDATE_INTERVAL_MS = 40; // ~25 FPS
     private static final long ALARM_INTERVAL_MS = 1000; // 1 second alarm wakeup
     
@@ -72,6 +77,9 @@ public class NervClockWidget extends AppWidgetProvider {
         // Initialize fonts once
         FontManager.initialize(appContext);
         
+        // Load saved theme
+        loadSavedTheme(appContext);
+        
         // Initialize notification helper
         if (notificationHelper == null) {
             notificationHelper = new NotificationHelper(appContext);
@@ -92,6 +100,25 @@ public class NervClockWidget extends AppWidgetProvider {
         // Start update loop and alarm
         startUpdates();
         scheduleAlarm(context);
+    }
+    
+    /**
+     * Load saved theme from SharedPreferences
+     */
+    private void loadSavedTheme(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        int savedTheme = prefs.getInt(PREF_THEME_INDEX, 0);
+        ColorScheme.setTheme(savedTheme);
+        Log.d(TAG, "Loaded saved theme: " + savedTheme);
+    }
+    
+    /**
+     * Save current theme to SharedPreferences
+     */
+    private void saveTheme(Context context, int themeIndex) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putInt(PREF_THEME_INDEX, themeIndex).apply();
+        Log.d(TAG, "Saved theme: " + themeIndex);
     }
     
     /**
@@ -180,6 +207,9 @@ public class NervClockWidget extends AppWidgetProvider {
         if (ACTION_UPDATE.equals(action)) {
             Log.d(TAG, "Alarm wakeup received");
             
+            // Load saved theme first
+            loadSavedTheme(appContext);
+            
             // Re-initialize if needed
             if (clockRenderer == null) {
                 FontManager.initialize(appContext);
@@ -211,7 +241,8 @@ public class NervClockWidget extends AppWidgetProvider {
         
         // Handle mode changes - initialize renderer if needed
         if (ACTION_STOP.equals(action) || ACTION_SLOW.equals(action) || 
-            ACTION_NORMAL.equals(action) || ACTION_RACING.equals(action)) {
+            ACTION_NORMAL.equals(action) || ACTION_RACING.equals(action) ||
+            ACTION_THEME.equals(action)) {
             
             // Initialize renderer if needed
             if (clockRenderer == null) {
@@ -224,6 +255,9 @@ public class NervClockWidget extends AppWidgetProvider {
             if (notificationHelper == null) {
                 notificationHelper = new NotificationHelper(appContext);
             }
+            
+            // Load saved theme on first init
+            loadSavedTheme(appContext);
             
             switch (action) {
                 case ACTION_STOP:
@@ -242,6 +276,15 @@ public class NervClockWidget extends AppWidgetProvider {
                 case ACTION_RACING:
                     clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.RACING);
                     Log.d(TAG, "Mode changed to RACING");
+                    break;
+                case ACTION_THEME:
+                    // Cycle to next color theme
+                    ColorScheme.nextTheme();
+                    int newTheme = ColorScheme.getThemeIndex();
+                    saveTheme(appContext, newTheme);
+                    // Update renderer colors
+                    clockRenderer.updateThemeColors();
+                    Log.d(TAG, "Theme changed to: " + newTheme);
                     break;
             }
             
@@ -315,21 +358,27 @@ public class NervClockWidget extends AppWidgetProvider {
         int minH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 100);
         int maxH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 150);
         
-        // Convert to pixels - these are the actual widget container dimensions
-        int widthPx = (int)(maxW * density);
-        int heightPx = (int)(maxH * density);
+        Log.d(TAG, "Raw dimensions - minW:" + minW + " maxW:" + maxW + " minH:" + minH + " maxH:" + maxH + " density:" + density);
+        
+        // On Android 12+, in portrait mode, min/max can be swapped
+        // Use the larger values for width and height
+        int widthDp = Math.max(minW, maxW);
+        int heightDp = Math.max(minH, maxH);
+        
+        // Convert to pixels
+        int widthPx = (int)(widthDp * density);
+        int heightPx = (int)(heightDp * density);
         
         // Store widget container dimensions
         widgetContainerWidth = Math.max(widthPx, 400);
         widgetContainerHeight = Math.max(heightPx, 150);
         
         // Use actual container dimensions for the bitmap
-        // This ensures the clock fills the widget properly when height changes
         currentWidth = widgetContainerWidth;
         currentHeight = widgetContainerHeight;
         
         Log.d(TAG, "Dimensions updated - Container: " + widgetContainerWidth + "x" + widgetContainerHeight + 
-              ", Bitmap: " + currentWidth + "x" + currentHeight + " (density: " + density + ")");
+              ", Bitmap: " + currentWidth + "x" + currentHeight);
     }
     
     /**
@@ -429,77 +478,17 @@ public class NervClockWidget extends AppWidgetProvider {
                 RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_canvas);
                 views.setImageViewBitmap(R.id.widget_image, bitmap);
                 
-                // Calculate button positioning for API 31+ with centerInside scaling
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    // Match the EXACT calculation from ClockViewRenderer:
-                    // baseUnit = min(width, height * 3)
-                    // controlBarHeight = baseUnit * 0.05
-                    // bottomMargin = baseUnit * 0.01
-                    // sideMargin = baseUnit * 0.02
-                    // controlBarTop = height - controlBarHeight - bottomMargin
-                    // buttonHeight = controlBarHeight * 0.85
-                    // buttonTop = controlBarTop + (controlBarHeight - buttonHeight) / 2
-                    
-                    float baseUnit = Math.min(widgetContainerWidth, widgetContainerHeight * 3.0f);
-                    float controlBarHeight = baseUnit * 0.05f;
-                    float bottomMargin = baseUnit * 0.01f;
-                    float sideMargin = baseUnit * 0.02f;
-                    
-                    // Control bar position
-                    float controlBarTop = widgetContainerHeight - controlBarHeight - bottomMargin;
-                    
-                    // Actual button position within control bar (centered, 85% height)
-                    float actualButtonHeight = controlBarHeight * 0.85f;
-                    float actualButtonTop = controlBarTop + (controlBarHeight - actualButtonHeight) / 2;
-                    
-                    // Adjustment: the offset needed depends on widget aspect ratio
-                    // When widget is tall (aspect < 3), we need more offset
-                    // When widget is wide (aspect >= 3), we need less offset
-                    float aspectRatio = (float) widgetContainerWidth / widgetContainerHeight;
-                    float idealAspect = 3.0f;
-                    
-                    // Scale the adjustment based on how far we are from ideal aspect
-                    float adjustmentFactor;
-                    if (aspectRatio >= idealAspect) {
-                        // Wide widget - use base adjustment
-                        adjustmentFactor = 1.35f;
-                    } else {
-                        // Tall widget - increase adjustment (inverse proportion)
-                        adjustmentFactor = 1.35f * (idealAspect / aspectRatio);
-                    }
-                    
-                    int buttonTopMargin = (int) (actualButtonTop - controlBarHeight * adjustmentFactor);
-                    int buttonHeight = (int) actualButtonHeight;
-                    int buttonSideMargin = (int) sideMargin;
-                    
-                    Log.d(TAG, "Button calc: container=" + widgetContainerWidth + "x" + widgetContainerHeight + 
-                          ", baseUnit=" + baseUnit + ", ctrlBarTop=" + controlBarTop +
-                          ", topM=" + buttonTopMargin + ", btnH=" + buttonHeight);
-                    
-                    views.setViewLayoutHeight(R.id.button_container, buttonHeight, android.util.TypedValue.COMPLEX_UNIT_PX);
-                    
-                    views.setViewLayoutMargin(R.id.button_container, 
-                        android.widget.RemoteViews.MARGIN_TOP, 
-                        buttonTopMargin, 
-                        android.util.TypedValue.COMPLEX_UNIT_PX);
-                    
-                    views.setViewLayoutMargin(R.id.button_container,
-                        android.widget.RemoteViews.MARGIN_START,
-                        buttonSideMargin,
-                        android.util.TypedValue.COMPLEX_UNIT_PX);
-                    views.setViewLayoutMargin(R.id.button_container,
-                        android.widget.RemoteViews.MARGIN_END,
-                        buttonSideMargin,
-                        android.util.TypedValue.COMPLEX_UNIT_PX);
-                }
-                // For Android 11 (API 30), button positioning uses fixed layout from XML
-                // The clock content scales properly via ClockViewRenderer.drawClock()
+                // Button positioning is handled by the layout XML
+                // Both Android 11 and 12+ use the same approach with alignParentTop/Bottom
                 
                 // Set up click handlers for buttons
                 views.setOnClickPendingIntent(R.id.btn_stop, createPendingIntent(context, ACTION_STOP, 1));
                 views.setOnClickPendingIntent(R.id.btn_slow, createPendingIntent(context, ACTION_SLOW, 2));
                 views.setOnClickPendingIntent(R.id.btn_normal, createPendingIntent(context, ACTION_NORMAL, 3));
                 views.setOnClickPendingIntent(R.id.btn_racing, createPendingIntent(context, ACTION_RACING, 4));
+                
+                // Set up click handler for title (color theme change)
+                views.setOnClickPendingIntent(R.id.btn_title, createPendingIntent(context, ACTION_THEME, 5));
                 
                 mgr.updateAppWidget(id, views);
             }
@@ -512,26 +501,27 @@ public class NervClockWidget extends AppWidgetProvider {
         try {
             if (currentWidth <= 0 || currentHeight <= 0) return null;
             
-            // Use the full container size - no aspect ratio restriction
-            // The renderer will handle proper scaling internally
-            bitmapWidth = currentWidth;
-            bitmapHeight = currentHeight;
+            // Force consistent aspect ratio (~2.2:1) for pixel-perfect rendering
+            // This matches the ideal widget proportions
+            float idealRatio = 2.2f;
+            float currentRatio = (float) currentWidth / currentHeight;
             
-            // Limit maximum bitmap size to avoid RemoteViews 1MB limit
-            // Max ~800KB for ARGB_8888 = ~200,000 pixels = ~600x333 or similar
-            int maxPixels = 500000; // Safe limit
-            int currentPixels = bitmapWidth * bitmapHeight;
-            if (currentPixels > maxPixels) {
-                float scale = (float) Math.sqrt((float) maxPixels / currentPixels);
-                bitmapWidth = (int)(bitmapWidth * scale);
-                bitmapHeight = (int)(bitmapHeight * scale);
+            if (currentRatio > idealRatio) {
+                // Widget is wider than ideal - reduce width to match ideal ratio
+                bitmapWidth = (int)(currentHeight * idealRatio);
+                bitmapHeight = currentHeight;
+            } else {
+                // Widget is taller than ideal - use full width
+                bitmapWidth = currentWidth;
+                bitmapHeight = (int)(currentWidth / idealRatio);
             }
             
             // Ensure minimum size
             bitmapWidth = Math.max(bitmapWidth, 100);
             bitmapHeight = Math.max(bitmapHeight, 50);
             
-            Log.d(TAG, "Bitmap size: " + bitmapWidth + "x" + bitmapHeight + " (container: " + currentWidth + "x" + currentHeight + ")");
+            Log.d(TAG, "Bitmap size: " + bitmapWidth + "x" + bitmapHeight + 
+                  " (container: " + currentWidth + "x" + currentHeight + ")");
             
             Bitmap bitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888);
             android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
