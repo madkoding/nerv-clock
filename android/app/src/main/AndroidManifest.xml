@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.nerv.clock"
-    android:versionCode="210"
-    android:versionName="2.1.0">
+    android:versionCode="220"
+    android:versionName="2.2.0">
     
     <uses-sdk
         android:minSdkVersion="30"
@@ -19,6 +20,15 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Notification permission for Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Foreground service permission for Android 9+ -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Foreground service type for Android 14+ -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Usage stats for launcher detection (optional but recommended) -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- Request ignore battery optimizations -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     
     <!-- Required for widgets in Android 12+ -->
     <uses-feature android:name="android.software.app_widgets" android:required="false" />
@@ -71,6 +81,14 @@
                 <action android:name="android.intent.action.REBOOT" />
             </intent-filter>
         </receiver>
+
+        <!-- Foreground Service to keep widget alive on aggressive OEMs (Xiaomi, etc.) -->
+        <service
+            android:name=".WidgetUpdateService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
 
     </application>
 </manifest>
