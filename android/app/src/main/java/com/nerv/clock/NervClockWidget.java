@@ -97,6 +97,9 @@ public class NervClockWidget extends AppWidgetProvider {
             updateDimensions(appContext, options);
         }
         
+        // Do immediate update so widget shows content right away
+        updateAllWidgets(context);
+        
         // Start foreground service for reliable updates (especially on Xiaomi/Huawei)
         WidgetUpdateService.start(context);
         

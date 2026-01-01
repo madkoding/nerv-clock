@@ -161,6 +161,10 @@ public class WidgetUpdateService extends Service {
             isServiceRunning = true;
             refreshDimensions();
             launcherDetector.start();
+            
+            // IMPORTANT: Do initial widget update immediately
+            updateWidgets();
+            
             scheduleNextUpdate(0);
         }
         
@@ -299,9 +303,13 @@ public class WidgetUpdateService extends Service {
         if (!isScreenOn) {
             // Screen off - very slow updates just to keep service alive
             nextInterval = UPDATE_INTERVAL_BACKGROUND_MS;
+            // Still update occasionally to keep state current
+            updateWidgets();
         } else if (!isLauncherInForeground) {
             // Screen on but launcher not in foreground - slow updates
             nextInterval = UPDATE_INTERVAL_BACKGROUND_MS;
+            // Still update to ensure widget shows correctly
+            updateWidgets();
         } else {
             // Screen on and launcher in foreground - fast updates
             nextInterval = UPDATE_INTERVAL_ACTIVE_MS;
