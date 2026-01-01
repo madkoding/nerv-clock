@@ -54,6 +54,9 @@ public class BootReceiver extends BroadcastReceiver {
                 Bundle options = appWidgetManager.getAppWidgetOptions(appWidgetIds[0]);
                 Log.d(TAG, "Widget options after boot: " + options);
                 
+                // Start foreground service for reliable updates (Xiaomi/Huawei fix)
+                WidgetUpdateService.start(context);
+                
                 // Send update broadcast to widget
                 Intent updateIntent = new Intent(context, NervClockWidget.class);
                 updateIntent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);

@@ -97,8 +97,10 @@ public class NervClockWidget extends AppWidgetProvider {
             updateDimensions(appContext, options);
         }
         
-        // Start update loop and alarm
-        startUpdates();
+        // Start foreground service for reliable updates (especially on Xiaomi/Huawei)
+        WidgetUpdateService.start(context);
+        
+        // Also keep legacy alarm as backup
         scheduleAlarm(context);
     }
     
@@ -178,6 +180,11 @@ public class NervClockWidget extends AppWidgetProvider {
         Log.d(TAG, "Widget enabled");
         appContext = context.getApplicationContext();
         FontManager.initialize(appContext);
+        
+        // Start foreground service for reliable updates
+        WidgetUpdateService.start(context);
+        
+        // Also keep legacy alarm as backup
         scheduleAlarm(context);
     }
     
@@ -187,6 +194,9 @@ public class NervClockWidget extends AppWidgetProvider {
         Log.d(TAG, "Widget disabled");
         stopUpdates();
         cancelAlarm(context);
+        
+        // Stop foreground service when no widgets remain
+        WidgetUpdateService.stop(context);
     }
     
     @Override
@@ -231,10 +241,10 @@ public class NervClockWidget extends AppWidgetProvider {
                 notificationHelper = new NotificationHelper(appContext);
             }
             
-            // Ensure updates are running
-            startUpdates();
+            // Ensure foreground service is running
+            WidgetUpdateService.start(context);
             
-            // Schedule next alarm
+            // Schedule next alarm as backup
             scheduleAlarm(context);
             return;
         }
