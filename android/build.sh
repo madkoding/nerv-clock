@@ -15,13 +15,13 @@ WINDOWS_SDK=$(ls -d /mnt/c/Users/*/AppData/Local/Android/Sdk 2>/dev/null | head 
 if [ -n "$WINDOWS_SDK" ] && [ -d "$WINDOWS_SDK/build-tools" ]; then
     BUILD_TOOLS="$WINDOWS_SDK/build-tools/36.1.0"
 else
-    BUILD_TOOLS="$HOME/Android/Sdk/build-tools/35.0.0"
+    BUILD_TOOLS="$HOME/Android/Sdk/build-tools/36.1.0"
 fi
 
 # Use local SDK for platform (avoid permission issues with Windows paths)
-PLATFORM="$HOME/android-sdk/platforms/android-34"
+PLATFORM="$HOME/Android/Sdk/platforms/android-34"
 if [ ! -d "$PLATFORM" ]; then
-    PLATFORM="$HOME/Android/Sdk/platforms/android-35"
+    PLATFORM="$HOME/android-sdk/platforms/android-34"
 fi
 
 # Fallback to older versions if not available

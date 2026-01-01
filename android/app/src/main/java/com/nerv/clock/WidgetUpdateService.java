@@ -122,6 +122,10 @@ public class WidgetUpdateService extends Service {
         String action = intent != null ? intent.getAction() : null;
         Log.d(TAG, "onStartCommand action: " + action);
         
+        // CRITICAL: Start foreground service IMMEDIATELY to avoid ANR/crash
+        // Must be called within 5 seconds of startForegroundService()
+        startForegroundServiceNotification();
+        
         if (ACTION_STOP.equals(action)) {
             stopSelf();
             return START_NOT_STICKY;
@@ -151,9 +155,6 @@ public class WidgetUpdateService extends Service {
             // Force immediate update after mode change
             updateWidgets();
         }
-        
-        // Start foreground service
-        startForegroundService();
         
         // Start update loop (only once)
         if (!isServiceRunning) {
@@ -189,7 +190,7 @@ public class WidgetUpdateService extends Service {
         return null;
     }
     
-    private void startForegroundService() {
+    private void startForegroundServiceNotification() {
         createNotificationChannel();
         
         Intent stopIntent = new Intent(this, WidgetUpdateService.class);
@@ -216,7 +217,13 @@ public class WidgetUpdateService extends Service {
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Detener", stopPendingIntent)
             .build();
         
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        // Android 12+ requires foreground service type
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+ (API 34+): Use SPECIAL_USE for widget updates
+            startForeground(NOTIFICATION_ID, notification, 
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10-13: Use DATA_SYNC (deprecated in API 35+ but works)
             startForeground(NOTIFICATION_ID, notification, 
                 android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         } else {
@@ -267,7 +274,12 @@ public class WidgetUpdateService extends Service {
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_SCREEN_ON);
         filter.addAction(Intent.ACTION_SCREEN_OFF);
-        registerReceiver(screenReceiver, filter);
+        // Android 12+ requires RECEIVER_NOT_EXPORTED flag for non-exported receivers
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(screenReceiver, filter);
+        }
     }
     
     private void unregisterScreenReceiver() {
@@ -319,8 +331,9 @@ public class WidgetUpdateService extends Service {
             int[] ids = mgr.getAppWidgetIds(widget);
             
             if (ids == null || ids.length == 0) {
-                Log.d(TAG, "No widgets found, stopping service");
-                stopSelf();
+                Log.d(TAG, "No widgets found, will retry");
+                // Don't stop immediately - widget might still be registering
+                // Just return and let the update loop retry
                 return;
             }
             
@@ -470,15 +483,165 @@ public class WidgetUpdateService extends Service {
     
     /**
      * Static method to start the service from other components
+     * On Android 12+ (API 31+), foreground services cannot be started from background.
+     * We need to handle this gracefully.
      */
     public static void start(Context context) {
-        Intent intent = new Intent(context, WidgetUpdateService.class);
-        intent.setAction(ACTION_START);
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent);
-        } else {
-            context.startService(intent);
+        try {
+            Intent intent = new Intent(context, WidgetUpdateService.class);
+            intent.setAction(ACTION_START);
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Android 12+: Try to start, but catch exception if not allowed
+                // The widget will still render via direct updates
+                try {
+                    context.startForegroundService(intent);
+                } catch (Exception e) {
+                    Log.w(TAG, "Cannot start foreground service from background on Android 12+: " + e.getMessage());
+                    // Fallback: do direct widget update without service
+                    doDirectWidgetUpdate(context);
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent);
+            } else {
+                context.startService(intent);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to start service: " + e.getMessage());
+            // Fallback to direct update
+            doDirectWidgetUpdate(context);
+        }
+    }
+    
+    /**
+     * Direct widget update without service - for Android 12+ restrictions
+     */
+    private static void doDirectWidgetUpdate(Context context) {
+        try {
+            // Initialize if needed
+            if (handler == null) {
+                handler = new Handler(Looper.getMainLooper());
+            }
+            
+            FontManager.initialize(context);
+            
+            if (clockRenderer == null) {
+                clockRenderer = new ClockViewRenderer(context);
+            }
+            
+            // Load theme
+            int themeIndex = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getInt(PREF_THEME_INDEX, 0);
+            ColorScheme.setTheme(themeIndex);
+            
+            // Render and update widget
+            AppWidgetManager mgr = AppWidgetManager.getInstance(context);
+            ComponentName widget = new ComponentName(context, NervClockWidget.class);
+            int[] ids = mgr.getAppWidgetIds(widget);
+            
+            if (ids == null || ids.length == 0) return;
+            
+            // Get widget dimensions
+            int width = 400;
+            int height = 150;
+            for (int id : ids) {
+                Bundle options = mgr.getAppWidgetOptions(id);
+                int minW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 180);
+                int minH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 60);
+                width = Math.max(width, (int)(minW * 2.5f));
+                height = Math.max(height, (int)(minH * 2.5f));
+            }
+            
+            // Create bitmap and draw clock
+            Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
+            clockRenderer.drawClock(canvas, width, height);
+            
+            for (int id : ids) {
+                RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_canvas);
+                views.setImageViewBitmap(R.id.widget_image, bitmap);
+                
+                // Set up click handlers
+                views.setOnClickPendingIntent(R.id.btn_stop, createPendingIntent(context, ACTION_MODE_STOP, 1));
+                views.setOnClickPendingIntent(R.id.btn_slow, createPendingIntent(context, ACTION_MODE_SLOW, 2));
+                views.setOnClickPendingIntent(R.id.btn_normal, createPendingIntent(context, ACTION_MODE_NORMAL, 3));
+                views.setOnClickPendingIntent(R.id.btn_racing, createPendingIntent(context, ACTION_MODE_RACING, 4));
+                views.setOnClickPendingIntent(R.id.btn_title, createPendingIntent(context, ACTION_THEME, 5));
+                
+                mgr.updateAppWidget(id, views);
+            }
+            
+            Log.d(TAG, "Direct widget update completed");
+        } catch (Exception e) {
+            Log.e(TAG, "Direct widget update failed: " + e.getMessage());
+        }
+    }
+    
+    private static PendingIntent createPendingIntent(Context context, String action, int requestCode) {
+        Intent intent = new Intent(context, NervClockWidget.class);
+        intent.setAction(action);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        return PendingIntent.getBroadcast(context, requestCode, intent, flags);
+    }
+    
+    /**
+     * Handle actions from widget clicks (for Android 12+ where service may not be running)
+     */
+    public static void handleAction(Context context, String action) {
+        try {
+            // Initialize if needed
+            if (clockRenderer == null) {
+                FontManager.initialize(context);
+                clockRenderer = new ClockViewRenderer(context);
+                // Load saved theme
+                int themeIndex = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .getInt(PREF_THEME_INDEX, 0);
+                ColorScheme.setTheme(themeIndex);
+            }
+            
+            // Handle the action
+            switch (action) {
+                case ACTION_MODE_STOP:
+                    if (clockRenderer.getClockLogic() != null) {
+                        clockRenderer.getClockLogic().togglePause();
+                    }
+                    break;
+                case ACTION_MODE_SLOW:
+                    if (clockRenderer.getClockLogic() != null) {
+                        clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.SLOW);
+                    }
+                    break;
+                case ACTION_MODE_NORMAL:
+                    if (clockRenderer.getClockLogic() != null) {
+                        clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.NORMAL);
+                    }
+                    break;
+                case ACTION_MODE_RACING:
+                    if (clockRenderer.getClockLogic() != null) {
+                        clockRenderer.getClockLogic().setMode(com.nerv.clock.ui.ClockLogic.Mode.RACING);
+                    }
+                    break;
+                case ACTION_THEME:
+                    ColorScheme.nextTheme();
+                    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit()
+                        .putInt(PREF_THEME_INDEX, ColorScheme.getThemeIndex())
+                        .apply();
+                    if (clockRenderer != null) {
+                        clockRenderer.updateThemeColors();
+                    }
+                    break;
+            }
+            
+            // Update widget after action
+            doDirectWidgetUpdate(context);
+            
+            Log.d(TAG, "Action handled: " + action);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to handle action: " + e.getMessage());
         }
     }
     

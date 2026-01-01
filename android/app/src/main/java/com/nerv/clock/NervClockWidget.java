@@ -15,19 +15,27 @@ import android.util.Log;
 /**
  * NERV Clock Widget Provider
  * 
- * This widget provider ONLY handles:
- * - Starting the WidgetUpdateService when widget is added
- * - Stopping the service when all widgets are removed
- * - Scheduling backup alarms to restart service if killed
+ * This widget provider handles:
+ * - Starting the WidgetUpdateService when widget is added (pre-Android 12)
+ * - Direct widget updates on Android 12+ where foreground services are restricted
+ * - Scheduling backup alarms to keep widget updated
+ * - Handling button clicks for mode changes
  * 
- * ALL rendering and state management is handled by WidgetUpdateService
- * to prevent duplicate instances and state conflicts.
+ * On Android 12+, the widget updates directly without a foreground service
+ * to comply with background execution restrictions.
  */
 public class NervClockWidget extends AppWidgetProvider {
     
     private static final String TAG = "NervClockWidget";
     private static final String ACTION_UPDATE = "com.nerv.clock.ACTION_UPDATE";
-    private static final long ALARM_INTERVAL_MS = 5000; // 5 second backup alarm
+    private static final long ALARM_INTERVAL_MS = 100; // 100ms for smooth animation
+    
+    // Button actions
+    public static final String ACTION_MODE_STOP = "com.nerv.clock.ACTION_STOP";
+    public static final String ACTION_MODE_SLOW = "com.nerv.clock.ACTION_SLOW";
+    public static final String ACTION_MODE_NORMAL = "com.nerv.clock.ACTION_NORMAL";
+    public static final String ACTION_MODE_RACING = "com.nerv.clock.ACTION_RACING";
+    public static final String ACTION_THEME = "com.nerv.clock.ACTION_THEME";
     
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
@@ -79,11 +87,21 @@ public class NervClockWidget extends AppWidgetProvider {
         
         Log.d(TAG, "onReceive: " + action);
         
-        // Handle backup alarm - just restart the service
-        if (ACTION_UPDATE.equals(action)) {
-            Log.d(TAG, "Backup alarm triggered, ensuring service is running");
-            WidgetUpdateService.start(context);
-            scheduleAlarm(context);
+        // Handle button clicks and mode changes
+        switch (action) {
+            case ACTION_UPDATE:
+                Log.d(TAG, "Update alarm triggered");
+                WidgetUpdateService.start(context);
+                scheduleAlarm(context);
+                break;
+            case ACTION_MODE_STOP:
+            case ACTION_MODE_SLOW:
+            case ACTION_MODE_NORMAL:
+            case ACTION_MODE_RACING:
+            case ACTION_THEME:
+                // Forward to service for mode handling
+                WidgetUpdateService.handleAction(context, action);
+                break;
         }
     }
     
