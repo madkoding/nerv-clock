@@ -217,15 +217,11 @@ public class WidgetUpdateService extends Service {
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Detener", stopPendingIntent)
             .build();
         
-        // Android 12+ requires foreground service type
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // Android 14+ (API 34+): Use SPECIAL_USE for widget updates
+        // Android 10+ requires foreground service type
+        // Always use SPECIAL_USE since that's what's declared in manifest
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, 
                 android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10-13: Use DATA_SYNC (deprecated in API 35+ but works)
-            startForeground(NOTIFICATION_ID, notification, 
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         } else {
             startForeground(NOTIFICATION_ID, notification);
         }
@@ -649,8 +645,20 @@ public class WidgetUpdateService extends Service {
      * Static method to stop the service
      */
     public static void stop(Context context) {
-        Intent intent = new Intent(context, WidgetUpdateService.class);
-        intent.setAction(ACTION_STOP);
-        context.startService(intent);
+        try {
+            // On Android 12+, we can't start service from background
+            // Just let the service stop itself when it detects no widgets
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Service will stop itself when it sees no widgets
+                Log.d(TAG, "Android 12+: Service will stop itself");
+                return;
+            }
+            
+            Intent intent = new Intent(context, WidgetUpdateService.class);
+            intent.setAction(ACTION_STOP);
+            context.startService(intent);
+        } catch (Exception e) {
+            Log.w(TAG, "Could not stop service: " + e.getMessage());
+        }
     }
 }
