@@ -59,13 +59,15 @@ public class WidgetUpdateService extends Service {
     private static final long UPDATE_INTERVAL_ACTIVE_MS = 40; // ~25 FPS when active
     private static final long UPDATE_INTERVAL_BACKGROUND_MS = 1000; // 1 FPS when in background
     
-    private Handler handler;
-    private ClockViewRenderer clockRenderer;
+    // Static instance to prevent multiple services
+    private static WidgetUpdateService instance = null;
+    private static Handler handler;
+    private static ClockViewRenderer clockRenderer;
+    private static boolean isServiceRunning = false;
+    
     private NotificationHelper notificationHelper;
     private PowerManager powerManager;
     private boolean isScreenOn = true;
-    private boolean isLauncherInForeground = true;
-    private boolean isServiceRunning = false;
     
     // Dimensions
     private int currentWidth = 400;
@@ -74,15 +76,23 @@ public class WidgetUpdateService extends Service {
     // Screen state receiver
     private BroadcastReceiver screenReceiver;
     
-    // Launcher detector
-    private LauncherDetector launcherDetector;
-    
     @Override
     public void onCreate() {
         super.onCreate();
         Log.d(TAG, "Service onCreate");
         
-        handler = new Handler(Looper.getMainLooper());
+        // Prevent multiple instances
+        if (instance != null) {
+            Log.d(TAG, "Service instance already exists, reusing");
+            return;
+        }
+        instance = this;
+        
+        // Only create handler once
+        if (handler == null) {
+            handler = new Handler(Looper.getMainLooper());
+        }
+        
         powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         
         // Initialize fonts
@@ -91,25 +101,14 @@ public class WidgetUpdateService extends Service {
         // Load saved theme
         loadSavedTheme();
         
-        // Initialize renderer
-        clockRenderer = new ClockViewRenderer(this);
-        setupTimerListener();
+        // Only create renderer once (static)
+        if (clockRenderer == null) {
+            clockRenderer = new ClockViewRenderer(this);
+            setupTimerListener();
+        }
         
         // Initialize notification helper
         notificationHelper = new NotificationHelper(this);
-        
-        // Initialize launcher detector
-        launcherDetector = new LauncherDetector(this, new LauncherDetector.LauncherStateListener() {
-            @Override
-            public void onLauncherStateChanged(boolean isInForeground) {
-                isLauncherInForeground = isInForeground;
-                Log.d(TAG, "Launcher foreground: " + isInForeground);
-                if (isInForeground && isScreenOn) {
-                    // Launcher came to foreground, ensure fast updates
-                    scheduleNextUpdate(UPDATE_INTERVAL_ACTIVE_MS);
-                }
-            }
-        });
         
         // Register screen state receiver
         registerScreenReceiver();
@@ -156,16 +155,16 @@ public class WidgetUpdateService extends Service {
         // Start foreground service
         startForegroundService();
         
-        // Start update loop
+        // Start update loop (only once)
         if (!isServiceRunning) {
             isServiceRunning = true;
             refreshDimensions();
-            launcherDetector.start();
             
             // IMPORTANT: Do initial widget update immediately
             updateWidgets();
             
-            scheduleNextUpdate(0);
+            // Start the update loop
+            scheduleNextUpdate(UPDATE_INTERVAL_ACTIVE_MS);
         }
         
         return START_STICKY;
@@ -175,13 +174,13 @@ public class WidgetUpdateService extends Service {
     public void onDestroy() {
         Log.d(TAG, "Service onDestroy");
         isServiceRunning = false;
-        handler.removeCallbacksAndMessages(null);
         
-        if (launcherDetector != null) {
-            launcherDetector.stop();
+        if (handler != null) {
+            handler.removeCallbacksAndMessages(null);
         }
         
         unregisterScreenReceiver();
+        instance = null;
         super.onDestroy();
     }
     
@@ -297,23 +296,17 @@ public class WidgetUpdateService extends Service {
     private void updateLoop() {
         if (!isServiceRunning) return;
         
-        // Determine update interval based on state
-        long nextInterval;
+        // Always update the widget
+        updateWidgets();
         
-        if (!isScreenOn) {
-            // Screen off - very slow updates just to keep service alive
-            nextInterval = UPDATE_INTERVAL_BACKGROUND_MS;
-            // Still update occasionally to keep state current
-            updateWidgets();
-        } else if (!isLauncherInForeground) {
-            // Screen on but launcher not in foreground - slow updates
-            nextInterval = UPDATE_INTERVAL_BACKGROUND_MS;
-            // Still update to ensure widget shows correctly
-            updateWidgets();
-        } else {
-            // Screen on and launcher in foreground - fast updates
+        // Determine next update interval based on screen state
+        long nextInterval;
+        if (isScreenOn) {
+            // Screen on - fast updates for smooth animation
             nextInterval = UPDATE_INTERVAL_ACTIVE_MS;
-            updateWidgets();
+        } else {
+            // Screen off - slow updates just to keep service alive
+            nextInterval = UPDATE_INTERVAL_BACKGROUND_MS;
         }
         
         scheduleNextUpdate(nextInterval);
