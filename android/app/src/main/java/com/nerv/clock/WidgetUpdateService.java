@@ -282,7 +282,12 @@ public class WidgetUpdateService extends Service {
         if (!isServiceRunning) return;
         
         handler.removeCallbacksAndMessages(null);
-        handler.postDelayed(this::updateLoop, delayMs);
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                updateLoop();
+            }
+        }, delayMs);
     }
     
     private void updateLoop() {

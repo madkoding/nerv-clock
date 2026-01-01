@@ -111,7 +111,12 @@ public class LauncherDetector {
     
     private void scheduleCheck() {
         if (!isRunning) return;
-        handler.postDelayed(this::checkLauncherState, CHECK_INTERVAL_MS);
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                checkLauncherState();
+            }
+        }, CHECK_INTERVAL_MS);
     }
     
     private void checkLauncherState() {

@@ -111,25 +111,34 @@ public class NervClockActivity extends Activity {
                        ", necesitas excluir NERV Clock de la optimización de batería.\n\n" +
                        "Esto permite que el reloj se actualice continuamente cuando el launcher está visible.\n\n" +
                        "¿Deseas abrir la configuración ahora?")
-            .setPositiveButton("Configurar", (dialog, which) -> {
-                // Mark as shown
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                    .edit()
-                    .putBoolean(PREF_BATTERY_DIALOG_SHOWN, true)
-                    .apply();
-                
-                // Open manufacturer-specific settings
-                BatteryOptimizationHelper.openManufacturerBatterySettings(this);
+            .setPositiveButton("Configurar", new android.content.DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(android.content.DialogInterface dialog, int which) {
+                    // Mark as shown
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                        .edit()
+                        .putBoolean(PREF_BATTERY_DIALOG_SHOWN, true)
+                        .apply();
+                    
+                    // Open manufacturer-specific settings
+                    BatteryOptimizationHelper.openManufacturerBatterySettings(NervClockActivity.this);
+                }
             })
-            .setNegativeButton("Más tarde", (dialog, which) -> {
-                dialog.dismiss();
+            .setNegativeButton("Más tarde", new android.content.DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(android.content.DialogInterface dialog, int which) {
+                    dialog.dismiss();
+                }
             })
-            .setNeutralButton("No mostrar", (dialog, which) -> {
-                // Mark as shown so it doesn't appear again
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                    .edit()
-                    .putBoolean(PREF_BATTERY_DIALOG_SHOWN, true)
-                    .apply();
+            .setNeutralButton("No mostrar", new android.content.DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(android.content.DialogInterface dialog, int which) {
+                    // Mark as shown so it doesn't appear again
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                        .edit()
+                        .putBoolean(PREF_BATTERY_DIALOG_SHOWN, true)
+                        .apply();
+                }
             })
             .setCancelable(true)
             .show();
