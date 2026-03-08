@@ -3,7 +3,7 @@
 > **Bring NERV's command center to your desktop** — An authentic Evangelion-style clock widget for desktop and Android, meticulously crafted to capture the iconic aesthetic of NERV headquarters.
 
 <p align="center">
-  <img src="https://storage.ko-fi.com/cdn/useruploads/display/b964f0b8-6303-4269-bc69-3b0e4b0e43cbf1fd_77ed74b0-1baa-407b-bc24-bebb2013c16a.png" alt="NERV Clock Preview" width="800">
+  <img src="https://storage.ko-fi.com/cdn/useruploads/display/b964f0b8-6303-4269-bc69-3b0e43cbf1fd_77ed74b0-1baa-407b-bc24-bebb2013c16a.png" alt="NERV Clock Preview" width="800">
 </p>
 
 ## 🎯 Features
