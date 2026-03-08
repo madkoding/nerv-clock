@@ -1,10 +1,10 @@
-# ⚡ NERV Clock 
-
-> **Bring NERV's command center to your desktop** — An authentic Evangelion-style clock widget for desktop and Android, meticulously crafted to capture the iconic aesthetic of NERV headquarters.
+# ⚡ NERV Clock
 
 <p align="center">
-  <img src="https://storage.ko-fi.com/cdn/useruploads/display/b964f0b8-6303-4269-bc69-3b0e43cbf1fd_77ed74b0-1baa-407b-bc24-bebb2013c16a.png" alt="NERV Clock Preview" width="800">
+  <img src="https://raw.githubusercontent.com/madkoding/madkoding/main/profile/projects/nerv-clock.svg" alt="NERV Clock Preview">
 </p>
+
+Professional streaming overlay system for content creators. Delivers real-time interactive widgets, alerts, and viewer engagement tools with sub-second latency. Built on modern web stack with optimized rendering pipeline.
 
 ## 🎯 Features
 
