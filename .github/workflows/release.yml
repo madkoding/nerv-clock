@@ -321,10 +321,9 @@ jobs:
           echo "" >> changelog.md
           cat changelog.md
 
-      - name: Create release in public repo
+      - name: Create release
         uses: softprops/action-gh-release@v1
         with:
-          repository: madkoding/nerv-clock-releases
           tag_name: ${{ github.ref_name }}
           name: 'NERV Clock ${{ github.ref_name }}'
           body_path: changelog.md
@@ -332,4 +331,4 @@ jobs:
           draft: false
           prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
