@@ -154,7 +154,9 @@ jobs:
 
       - name: Install Android Build Tools
         run: |
-          sdkmanager "build-tools;35.0.0" "platforms;android-35"
+          sdkmanager "build-tools;36.0.0" "platforms;android-36"
+          # Fallback to 35 if 36 not available
+          sdkmanager "build-tools;35.0.0" "platforms;android-35" || true
           # Fallback to 34 if 35 not available
           sdkmanager "build-tools;34.0.0" "platforms;android-34" || true
 
@@ -166,8 +168,11 @@ jobs:
           
           cd "$ANDROID_DIR"
           
-          # Try SDK 35 first, fallback to 34
-          if [ -d "$ANDROID_HOME/build-tools/35.0.0" ]; then
+          # Try SDK 36 first, fallback to 35, then 34
+          if [ -d "$ANDROID_HOME/build-tools/36.0.0" ]; then
+            export BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+            export PLATFORM="$ANDROID_HOME/platforms/android-36"
+          elif [ -d "$ANDROID_HOME/build-tools/35.0.0" ]; then
             export BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
             export PLATFORM="$ANDROID_HOME/platforms/android-35"
           else
