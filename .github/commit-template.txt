@@ -1,0 +1,29 @@
+# <type>(<scope>): <subject>
+#
+# <body>
+#
+# <footer>
+
+# Type should be one of the following:
+#   feat: A new feature
+#   fix: A bug fix
+#   docs: Documentation only changes
+#   style: Changes that do not affect the meaning of the code (white-space, formatting, etc)
+#   refactor: A code change that neither fixes a bug nor adds a feature
+#   perf: A code change that improves performance
+#   test: Adding missing tests or correcting existing tests
+#   build: Changes that affect the build system or external dependencies
+#   ci: Changes to CI configuration files and scripts
+#   chore: Other changes that don't modify src or test files
+#
+# Scope: optional, can be empty. Example: scope: (core, ui, api)
+#
+# Subject: brief description (max 50 chars)
+# Body: detailed description (optional, wrap at 72 chars)
+# Footer: breaking changes, issue references (optional)
+#
+# Example:
+# feat(ui): Add new clock display mode
+#
+# Implementa nuevo modo de visualización para el reloj
+# closes #123
