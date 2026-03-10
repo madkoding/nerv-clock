@@ -6,11 +6,26 @@
 	"scripts": {
 		"tauri": "tauri",
 		"dev": "tauri dev",
-		"build": "tauri build"
+		"build": "tauri build",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "eslint ui/clock.js",
+		"prepare": "husky install"
 	},
 	"author": "NERV",
 	"license": "MIT",
 	"devDependencies": {
-		"@tauri-apps/cli": "^2"
+		"@commitlint/cli": "^19.0.0",
+		"@commitlint/config-conventional": "^19.0.0",
+		"@tauri-apps/cli": "^2",
+		"eslint": "^8.57.0",
+		"husky": "^9.0.0",
+		"jsdom": "^28.1.0",
+		"vitest": "^2.0.0"
+	},
+	"commitlint": {
+		"extends": [
+			"@commitlint/config-conventional"
+		]
 	}
 }
