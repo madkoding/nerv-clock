@@ -68,19 +68,22 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install llvm-tools
-        run: |
-          rustup component add llvm-tools-preview
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
 
       - name: Run cargo test
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Run cargo llvm-cov
-        uses: taiki-e/cargo-llvm-cov-action@v2
+        run: cargo llvm-cov --lcov --output-path lcov.info
+        working-directory: src-tauri
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          files: src-tauri/lcov.info
           flags: rust
-          output-type: lcov
 
   build-android-check:
     runs-on: ubuntu-latest
@@ -98,11 +101,23 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android Build Tools
+      - name: Install Android SDK components
         run: |
-          sdkmanager "build-tools;34.0.0" "platforms;android-34"
+          yes | sdkmanager --licenses 2>/dev/null || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" 2>/dev/null || true
+          sdkmanager "platforms;android-33" "build-tools;33.0.2" 2>/dev/null || true
+          sdkmanager "platforms;android-30" "build-tools;30.0.3" 2>/dev/null || true
+
+      - name: Verify Android SDK
+        run: |
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "Build tools:"
+          ls -la "$ANDROID_HOME/build-tools/" 2>/dev/null || echo "No build-tools"
+          echo "Platforms:"
+          ls -la "$ANDROID_HOME/platforms/" 2>/dev/null || echo "No platforms"
 
       - name: Verify Android build
         run: |
           cd android
+          chmod +x build.sh
           ./build.sh
