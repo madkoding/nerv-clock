@@ -8,7 +8,8 @@ export default defineConfig({
 		coverage: {
 			provider: 'v8',
 			reporter: ['text', 'json', 'html'],
-			include: ['ui/**/*.js']
+			include: ['tests/clock-logic.js'],
+			exclude: ['**/*.test.js', '**/setup.js']
 		},
 		setupFiles: ['./tests/setup.js']
 	}
