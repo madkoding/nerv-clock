@@ -1,7 +1,7 @@
 // NERV Chronometer - Digital Clock with Multiple Modes
 // Modes: NORMAL (current time), RACING (stopwatch), SLOW (25min pomodoro), STOP/PLAY (pause/resume)
 
-class NervClock {
+export class NervClock {
     constructor() {
         this.hour1 = document.getElementById('hour1');
         this.hour2 = document.getElementById('hour2');

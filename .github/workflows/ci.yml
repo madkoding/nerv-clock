@@ -33,7 +33,7 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
-  test:
+  test-javascript:
     runs-on: ubuntu-latest
     
     steps:
@@ -48,11 +48,61 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: npm run coverage
 
-      - name: Upload coverage reports to Codecov
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/coverage-final.json
+          flags: javascript
+
+  test-rust:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install llvm-tools
+        run: |
+          rustup component add llvm-tools-preview
+
+      - name: Run cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Run cargo llvm-cov
+        uses: taiki-e/cargo-llvm-cov-action@v2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: rust
+          output-type: lcov
+
+  build-android-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android Build Tools
+        run: |
+          sdkmanager "build-tools;34.0.0" "platforms;android-34"
+
+      - name: Verify Android build
+        run: |
+          cd android
+          ./build.sh

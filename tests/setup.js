@@ -8,7 +8,10 @@ const mockElement = (id) => ({
 	appendChild: vi.fn(),
 	remove: vi.fn(),
 	querySelectorAll: vi.fn(() => []),
-	querySelector: vi.fn(() => null),
+	querySelector: vi.fn((selector) => {
+		if (selector === '.ghost') return null;
+		return null;
+	}),
 	style: {
 		display: ''
 	},
@@ -72,7 +75,18 @@ global.document = {
 	}),
 	addEventListener: vi.fn(),
 	readyState: 'complete',
-	createTextNode: vi.fn((text) => ({ nodeType: 3, textContent: text }))
+	createTextNode: vi.fn((text) => ({ nodeType: 3, textContent: text })),
+	createElement: vi.fn((tagName) => ({
+		tagName,
+		className: '',
+		innerHTML: '',
+		textContent: '',
+		appendChild: vi.fn(),
+		remove: vi.fn(),
+		style: {},
+		querySelector: vi.fn(() => null),
+		querySelectorAll: vi.fn(() => [])
+	}))
 };
 
 global.window = {
