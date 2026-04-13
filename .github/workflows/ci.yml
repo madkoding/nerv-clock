@@ -106,23 +106,25 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK components
+      - name: Accept Android SDK licenses
         run: |
-          yes | sdkmanager --licenses 2>/dev/null || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0" 2>/dev/null || true
-          sdkmanager "platforms;android-33" "build-tools;33.0.2" 2>/dev/null || true
-          sdkmanager "platforms;android-30" "build-tools;30.0.3" 2>/dev/null || true
+          yes | sdkmanager --licenses || true
+
+      - name: Install required Android SDK components
+        run: |
+          sdkmanager "platforms;android-30" "build-tools;30.0.3"
 
       - name: Verify Android SDK
         run: |
           echo "ANDROID_HOME: $ANDROID_HOME"
-          echo "Build tools:"
-          ls -la "$ANDROID_HOME/build-tools/" 2>/dev/null || echo "No build-tools"
-          echo "Platforms:"
-          ls -la "$ANDROID_HOME/platforms/" 2>/dev/null || echo "No platforms"
+          echo "Build tools available:"
+          ls -la "$ANDROID_HOME/build-tools/" || echo "No build-tools found"
 
       - name: Verify Android build
         run: |
           cd android
           chmod +x build.sh
+          export ANDROID_HOME="/usr/local/lib/android/sdk"
+          export ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
+          export SDK_PATH="/usr/local/lib/android/sdk"
           ./build.sh
