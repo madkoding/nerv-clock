@@ -63,3 +63,6 @@ If you can't donate right now, you can still help by:
 
 <!-- AUTO-UPDATE-DATE -->
 **Última actualización:** 2026-03-08
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=madkoding/nerv-clock&type=Date)](https://star-history.com/#madkoding/nerv-clock&Date)
