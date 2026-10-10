@@ -58,6 +58,10 @@ jobs:
           path: codeql.sarif
 
   sonar:
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     needs: [semgrep, codeql]
     runs-on: ubuntu-latest
     steps:
