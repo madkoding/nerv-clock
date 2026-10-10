@@ -1,0 +1,87 @@
+# Análisis de seguridad y calidad -> SonarQube (sonar.kodingvibes.com).
+# Sonar Community no hace análisis de taint (SQLi, XSS, path traversal...): lo hacen
+# Semgrep OSS y CodeQL, y su SARIF se importa a Sonar.
+# Secrets: SONAR_TOKEN y SONAR_HOST_URL.
+name: sonar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: sonar-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Semgrep OSS
+        run: |
+          pip install semgrep
+          semgrep scan --config p/owasp-top-ten --config p/security-audit --config p/java \
+            --exclude node_modules --exclude vendor --exclude target --exclude dist \
+            --sarif --output semgrep.sarif --metrics=off
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sarif-semgrep
+          path: semgrep.sarif
+
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: java-kotlin
+          queries: security-extended
+          build-mode: none
+      - uses: github/codeql-action/analyze@v3
+        with:
+          output: codeql-sarif
+      - run: cp codeql-sarif/*.sarif codeql.sarif
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sarif-codeql
+          path: codeql.sarif
+
+  sonar:
+    needs: [semgrep, codeql]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sarif-*
+          path: sarif
+          merge-multiple: true
+      - id: sarif
+        run: echo "paths=$(ls sarif/*.sarif | paste -sd, -)" >> "$GITHUB_OUTPUT"
+      - uses: SonarSource/sonarqube-scan-action@v6
+        with:
+          args: -Dsonar.sarifReportPaths=${{ steps.sarif.outputs.paths }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      # Informativo al principio: en un proyecto nuevo todo cuenta como "código nuevo".
+      # Quita continue-on-error para que el quality gate bloquee el CI.
+      - uses: SonarSource/sonarqube-quality-gate-action@v1
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
